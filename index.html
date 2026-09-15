@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>عقارتكم | منصة العقارات السورية</title>
+<meta name="description" content="عقارتكم - منصة العقارات السورية للبيع والشراء والإيجار">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#102844;--navy2:#173858;--gold:#d6a532;--bg:#f6f7f9;--text:#17304d;--muted:#718096;--line:#e5e9ef;--white:#fff;--shadow:0 10px 35px rgba(16,40,68,.09)}
+*{box-sizing:border-box}body{margin:0;font-family:Cairo,Arial,sans-serif;color:var(--text);background:var(--bg)}button,input,select{font:inherit}
+.top{background:var(--navy);color:#fff;height:68px;display:flex;align-items:center}.nav{width:min(1380px,94%);margin:auto;display:flex;align-items:center;gap:30px}.brand{margin-right:auto;display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none}.logo{width:45px;height:45px;border:2px solid var(--gold);border-radius:10px;display:grid;place-items:center;font-size:24px}.brand b{font-size:24px;display:block;line-height:1}.brand small{font-size:9px;color:#dbe4ed}.links{display:flex;gap:25px;align-items:center}.links a{color:#fff;text-decoration:none;font-size:14px}.links a.active{color:#f2c75a;border-bottom:2px solid #f2c75a;padding-bottom:21px}.login{border:1px solid #cbd5e1;background:transparent;color:#fff;border-radius:7px;padding:9px 15px;cursor:pointer}
+.hero{min-height:430px;position:relative;display:flex;align-items:center;background:linear-gradient(90deg,rgba(10,30,51,.7),rgba(10,30,51,.35)),url('https://images.unsplash.com/photo-1577083552431-6e5fd01988a5?auto=format&fit=crop&w=2000&q=85') center/cover}.hero-inner{width:min(1180px,92%);margin:auto;color:#fff}.eyebrow{font-size:16px;margin-bottom:8px}.hero h1{font-size:54px;margin:0 0 5px;font-weight:800}.hero h2{font-size:28px;margin:0 0 10px}.hero p{font-size:18px;margin:0 0 25px}.search{background:#fff;color:var(--text);border-radius:13px;padding:0;box-shadow:0 15px 40px rgba(0,0,0,.2);overflow:hidden;max-width:1100px}.tabs{display:flex}.tab{flex:1;border:0;background:#fff;padding:14px;font-weight:700;color:var(--text);cursor:pointer}.tab.active{background:var(--navy);color:#fff}.fields{display:grid;grid-template-columns:1.2fr 1.2fr 1fr 1fr 150px;gap:10px;padding:15px}.field{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}.field select,.field input{width:100%;border:0;outline:0;color:var(--text);background:transparent;font-size:13px}.searchbtn{background:var(--gold);border:0;border-radius:8px;color:#fff;font-weight:800;cursor:pointer}
+.section{width:min(1380px,94%);margin:45px auto}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.section h3{font-size:25px;margin:0}.more{color:var(--gold);text-decoration:none;font-weight:700}.categories{display:grid;grid-template-columns:repeat(8,1fr);gap:15px}.cat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 8px;text-align:center;box-shadow:var(--shadow);cursor:pointer;transition:.2s}.cat:hover{transform:translateY(-3px)}.cat .ico{font-size:31px}.cat span{display:block;margin-top:7px;font-weight:700;font-size:14px}
+.content-grid{display:grid;grid-template-columns:1fr 280px;gap:20px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.card{background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);position:relative}.pic{height:190px;background-size:cover;background-position:center;position:relative}.heart{position:absolute;top:12px;right:12px;width:36px;height:36px;border:0;border-radius:50%;background:#fff;color:var(--navy);cursor:pointer;font-size:20px}.badge{position:absolute;left:12px;top:12px;background:var(--gold);color:#fff;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:800}.price{position:absolute;right:12px;bottom:10px;background:rgba(10,28,47,.9);color:#fff;padding:6px 10px;border-radius:5px;font-weight:800}.body{padding:13px}.body h4{margin:0 0 5px;font-size:15px}.location{color:var(--muted);font-size:12px}.meta{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:12px;padding-top:10px;font-size:12px}.cities{background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px;box-shadow:var(--shadow)}.cities h4{margin:0 0 10px}.city{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid var(--line);cursor:pointer}.city:last-child{border:0}.features{background:#fff;border-radius:13px;padding:22px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;box-shadow:var(--shadow);margin-top:30px}.feature{text-align:center}.feature b{display:block;margin-top:7px}.feature span{font-size:12px;color:var(--muted)}
+.cta{margin-top:45px;background:linear-gradient(90deg,#102844,#1c3f60);color:#fff;padding:38px;border-radius:15px;display:flex;align-items:center;justify-content:space-between}.cta h3{margin:0 0 5px;font-size:25px}.cta p{margin:0;color:#dbe4ed}.goldbtn{background:var(--gold);border:0;color:#fff;font-weight:800;border-radius:8px;padding:12px 22px;cursor:pointer}
+footer{background:#0c2036;color:#cbd5e1;padding:35px 0;margin-top:45px}.foot{width:min(1380px,94%);margin:auto;display:flex;justify-content:space-between;gap:30px}.foot b{color:#fff;font-size:20px}.foot a{color:#cbd5e1;text-decoration:none;margin:0 10px;font-size:13px}
+.toast{position:fixed;bottom:25px;left:25px;background:var(--navy);color:#fff;padding:13px 18px;border-radius:8px;box-shadow:var(--shadow);display:none;z-index:20}
+@media(max-width:1000px){.links{display:none}.fields{grid-template-columns:1fr 1fr}.searchbtn{height:48px}.categories{grid-template-columns:repeat(4,1fr)}.content-grid{grid-template-columns:1fr}.cities{display:none}.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.hero{min-height:540px}.hero h1{font-size:38px}.hero h2{font-size:22px}.fields{grid-template-columns:1fr}.categories{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr}.features{grid-template-columns:1fr}.cta,.foot{flex-direction:column}.top{height:60px}.brand b{font-size:20px}}
+</style>
+</head>
+<body>
+<header class="top"><nav class="nav">
+<a class="brand" href="#"><span class="logo">⌂</span><span><b>عقارتكم</b><small>منصة العقارات السورية</small></span></a>
+<div class="links"><a class="active" href="#">الرئيسية</a><a href="#sale">عقارات للبيع</a><a href="#rent">عقارات للإيجار</a><a href="#add">أضف عقارك</a><a href="#cities">المدن</a><a href="#about">من نحن</a></div>
+<button class="login" onclick="toast('سيتم تفعيل تسجيل الدخول في النسخة القادمة')">♙ دخول / تسجيل</button>
+</nav></header>
+
+<section class="hero">
+<div class="hero-inner">
+<div class="eyebrow">كل المدن السورية في مكان واحد</div>
+<h1>عقارتكم</h1><h2>منصة العقارات السورية</h2>
+<p>ابحث عن عقارك بسهولة... شراء · بيع · إيجار</p>
+<div class="search">
+<div class="tabs"><button class="tab active" onclick="setMode(this,'شراء')">⌂ شراء</button><button class="tab" onclick="setMode(this,'إيجار')">⚿ إيجار</button><button class="tab" onclick="setMode(this,'بيع عقارك')">▣ بيع عقارك</button></div>
+<div class="fields">
+<div class="field"><label>المحافظة</label><select id="city"><option>اختر المحافظة</option><option>دمشق</option><option>ريف دمشق</option><option>حلب</option><option>حمص</option><option>حماة</option><option>اللاذقية</option><option>طرطوس</option></select></div>
+<div class="field"><label>نوع العقار</label><select id="type"><option>اختر نوع العقار</option><option>شقة</option><option>منزل</option><option>فيلا</option><option>أرض</option><option>محل تجاري</option><option>مكتب</option></select></div>
+<div class="field"><label>السعر</label><input placeholder="من — إلى"></div>
+<div class="field"><label>عدد غرف النوم</label><select><option>الكل</option><option>1</option><option>2</option><option>3</option><option>4+</option></select></div>
+<button class="searchbtn" onclick="search()">⌕ ابحث عن عقار</button>
+</div></div>
+</div></section>
+
+<section class="section">
+<div class="section-head"><h3>تصفح حسب نوع العقار</h3></div>
+<div class="categories">
+<div class="cat">🏢<span>شقق</span></div><div class="cat">🏠<span>منازل</span></div><div class="cat">🏡<span>فلل</span></div><div class="cat">🌳<span>أراضي</span></div><div class="cat">🏪<span>محلات تجارية</span></div><div class="cat">🏢<span>مكاتب</span></div><div class="cat">🏗️<span>أبنية</span></div><div class="cat">🌾<span>مزارع</span></div>
+</div></section>
+
+<section class="section" id="sale">
+<div class="section-head"><h3>⭐ عقارات مميزة</h3><a class="more" href="#">عرض المزيد ←</a></div>
+<div class="content-grid"><div class="cards">
+<article class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=80')"><button class="heart" onclick="favorite(this)">♡</button><span class="badge">مميز</span><span class="price">$180,000</span></div><div class="body"><h4>فيلا للبيع - منطقة برزة</h4><div class="location">⌖ دمشق - برزة</div><div class="meta"><span>500 م²</span><span>🛏 4</span><span>🚿 3</span></div></div></article>
+<article class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=900&q=80')"><button class="heart" onclick="favorite(this)">♡</button><span class="badge">مميز</span><span class="price">$95,000</span></div><div class="body"><h4>شقة للبيع - حي الزهراء</h4><div class="location">⌖ دمشق - الزهراء</div><div class="meta"><span>150 م²</span><span>🛏 3</span><span>🚿 2</span></div></div></article>
+<article class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=900&q=80')"><button class="heart" onclick="favorite(this)">♡</button><span class="badge">مميز</span><span class="price">$120,000</span></div><div class="body"><h4>شقة للإيجار - المزة</h4><div class="location">⌖ دمشق - المزة</div><div class="meta"><span>120 م²</span><span>🛏 3</span><span>🚿 3</span></div></div></article>
+</div>
+<aside class="cities" id="cities"><h4>📍 أهم المدن</h4><div class="city"><span>دمشق</span><b>›</b></div><div class="city"><span>ريف دمشق</span><b>›</b></div><div class="city"><span>حلب</span><b>›</b></div><div class="city"><span>حمص</span><b>›</b></div><div class="city"><span>حماة</span><b>›</b></div><div class="city"><span>اللاذقية</span><b>›</b></div><div class="city"><span>طرطوس</span><b>›</b></div></aside>
+</div>
+<div class="features"><div class="feature">🛡️<b>أمان وموثوقية</b><span>تحقق من هوية المعلن</span></div><div class="feature">🎧<b>دعم فني</b><span>خدمة عملاء على مدار الساعة</span></div><div class="feature">⭐<b>إعلانات مميزة</b><span>لوصول أكبر لعدد من العملاء</span></div></div>
+<div class="cta" id="add"><div><h3>عقارتكم ... خيارات أفضل في سوريا</h3><p>سوّق عقارك ووصل إلى عدد أكبر من المهتمين.</p></div><button class="goldbtn" onclick="toast('صفحة إضافة العقار قيد الإنشاء')">+ إضافة عقار</button></div>
+</section>
+
+<footer id="about"><div class="foot"><div><b>عقارتكم</b><div>منصة العقارات السورية</div></div><div><a href="#">الرئيسية</a><a href="#sale">بيع</a><a href="#rent">إيجار</a><a href="#add">أضف عقارك</a><a href="#">تواصل معنا</a></div><div>© 2026 عقارتكم</div></div></footer>
+<div class="toast" id="toast"></div>
+<script>
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
+function setMode(el,mode){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');toast('الوضع: '+mode)}
+function favorite(el){el.textContent=el.textContent==='♡'?'♥':'♡';toast(el.textContent==='♥'?'تمت إضافة العقار للمفضلة':'تمت إزالة العقار من المفضلة')}
+function search(){const c=document.getElementById('city').value,t=document.getElementById('type').value;if(c==='اختر المحافظة'&&t==='اختر نوع العقار')toast('اختر المحافظة أو نوع العقار للبحث');else toast('جاري البحث عن العقارات...')}
+</script>
+</body>
+</html>
