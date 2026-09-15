@@ -20,12 +20,20 @@ footer{background:#0c2036;color:#cbd5e1;padding:35px 0;margin-top:45px}.foot{wid
 @media(max-width:1000px){.links{display:none}.fields{grid-template-columns:1fr 1fr}.searchbtn{height:48px}.categories{grid-template-columns:repeat(4,1fr)}.content-grid{grid-template-columns:1fr}.cities{display:none}.cards{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.hero{min-height:540px}.hero h1{font-size:38px}.hero h2{font-size:22px}.fields{grid-template-columns:1fr}.categories{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr}.features{grid-template-columns:1fr}.cta,.foot{flex-direction:column}.top{height:60px}.brand b{font-size:20px}}
 </style>
+<link rel="stylesheet" href="app.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#102844">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="عقارتكم">
 </head>
 <body>
+<div class="storage-note">نسخة تجريبية: تُحفظ الحسابات والإعلانات على جهازك حاليًا إلى أن يتم ربط الخادم العام.</div>
 <header class="top"><nav class="nav">
 <a class="brand" href="#"><span class="logo">⌂</span><span><b>عقارتكم</b><small>منصة العقارات السورية</small></span></a>
 <div class="links"><a class="active" href="#">الرئيسية</a><a href="#sale">عقارات للبيع</a><a href="#rent">عقارات للإيجار</a><a href="#add">أضف عقارك</a><a href="#cities">المدن</a><a href="#about">من نحن</a></div>
-<button class="login" onclick="toast('سيتم تفعيل تسجيل الدخول في النسخة القادمة')">♙ دخول / تسجيل</button>
+<button class="login" id="accountButton">♙ دخول / تسجيل</button>
 </nav></header>
 
 <section class="hero">
@@ -34,13 +42,13 @@ footer{background:#0c2036;color:#cbd5e1;padding:35px 0;margin-top:45px}.foot{wid
 <h1>عقارتكم</h1><h2>منصة العقارات السورية</h2>
 <p>ابحث عن عقارك بسهولة... شراء · بيع · إيجار</p>
 <div class="search">
-<div class="tabs"><button class="tab active" onclick="setMode(this,'شراء')">⌂ شراء</button><button class="tab" onclick="setMode(this,'إيجار')">⚿ إيجار</button><button class="tab" onclick="setMode(this,'بيع عقارك')">▣ بيع عقارك</button></div>
+<div class="tabs"><button class="tab active" data-mode="sale">⌂ شراء</button><button class="tab" data-mode="rent">⚿ إيجار</button><button class="tab" data-add>▣ بيع عقارك</button></div>
 <div class="fields">
-<div class="field"><label>المحافظة</label><select id="city"><option>اختر المحافظة</option><option>دمشق</option><option>ريف دمشق</option><option>حلب</option><option>حمص</option><option>حماة</option><option>اللاذقية</option><option>طرطوس</option></select></div>
-<div class="field"><label>نوع العقار</label><select id="type"><option>اختر نوع العقار</option><option>شقة</option><option>منزل</option><option>فيلا</option><option>أرض</option><option>محل تجاري</option><option>مكتب</option></select></div>
-<div class="field"><label>السعر</label><input placeholder="من — إلى"></div>
-<div class="field"><label>عدد غرف النوم</label><select><option>الكل</option><option>1</option><option>2</option><option>3</option><option>4+</option></select></div>
-<button class="searchbtn" onclick="search()">⌕ ابحث عن عقار</button>
+<div class="field"><label for="city">المحافظة</label><select id="city"><option>اختر المحافظة</option><option>دمشق</option><option>ريف دمشق</option><option>حلب</option><option>حمص</option><option>حماة</option><option>اللاذقية</option><option>طرطوس</option></select></div>
+<div class="field"><label for="type">نوع العقار</label><select id="type"><option>اختر نوع العقار</option><option>شقة</option><option>منزل</option><option>فيلا</option><option>أرض</option><option>محل تجاري</option><option>مكتب</option></select></div>
+<div class="field"><label for="minPrice">السعر بالدولار</label><div class="price-range"><input id="minPrice" type="number" min="0" placeholder="من" aria-label="أقل سعر"><input id="maxPrice" type="number" min="0" placeholder="إلى" aria-label="أعلى سعر"></div></div>
+<div class="field"><label for="rooms">غرف النوم (على الأقل)</label><select id="rooms"><option value="">الكل</option><option>1</option><option>2</option><option>3</option><option value="4">4+</option></select></div>
+<button class="searchbtn" id="searchButton">⌕ ابحث عن عقار</button>
 </div></div>
 </div></section>
 
@@ -51,25 +59,27 @@ footer{background:#0c2036;color:#cbd5e1;padding:35px 0;margin-top:45px}.foot{wid
 </div></section>
 
 <section class="section" id="sale">
-<div class="section-head"><h3>⭐ عقارات مميزة</h3><a class="more" href="#">عرض المزيد ←</a></div>
-<div class="content-grid"><div class="cards">
-<article class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=900&q=80')"><button class="heart" onclick="favorite(this)">♡</button><span class="badge">مميز</span><span class="price">$180,000</span></div><div class="body"><h4>فيلا للبيع - منطقة برزة</h4><div class="location">⌖ دمشق - برزة</div><div class="meta"><span>500 م²</span><span>🛏 4</span><span>🚿 3</span></div></div></article>
-<article class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=900&q=80')"><button class="heart" onclick="favorite(this)">♡</button><span class="badge">مميز</span><span class="price">$95,000</span></div><div class="body"><h4>شقة للبيع - حي الزهراء</h4><div class="location">⌖ دمشق - الزهراء</div><div class="meta"><span>150 م²</span><span>🛏 3</span><span>🚿 2</span></div></div></article>
-<article class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=900&q=80')"><button class="heart" onclick="favorite(this)">♡</button><span class="badge">مميز</span><span class="price">$120,000</span></div><div class="body"><h4>شقة للإيجار - المزة</h4><div class="location">⌖ دمشق - المزة</div><div class="meta"><span>120 م²</span><span>🛏 3</span><span>🚿 3</span></div></div></article>
+<div class="section-head"><h3 id="resultsTitle">العقارات المتاحة</h3><button class="more" id="resetFilters">عرض الكل</button></div>
+<div class="content-grid"><div class="cards" id="propertyCards" aria-live="polite">
+<p>جارٍ تحميل الإعلانات…</p>
 </div>
 <aside class="cities" id="cities"><h4>📍 أهم المدن</h4><div class="city"><span>دمشق</span><b>›</b></div><div class="city"><span>ريف دمشق</span><b>›</b></div><div class="city"><span>حلب</span><b>›</b></div><div class="city"><span>حمص</span><b>›</b></div><div class="city"><span>حماة</span><b>›</b></div><div class="city"><span>اللاذقية</span><b>›</b></div><div class="city"><span>طرطوس</span><b>›</b></div></aside>
 </div>
-<div class="features"><div class="feature">🛡️<b>أمان وموثوقية</b><span>تحقق من هوية المعلن</span></div><div class="feature">🎧<b>دعم فني</b><span>خدمة عملاء على مدار الساعة</span></div><div class="feature">⭐<b>إعلانات مميزة</b><span>لوصول أكبر لعدد من العملاء</span></div></div>
-<div class="cta" id="add"><div><h3>عقارتكم ... خيارات أفضل في سوريا</h3><p>سوّق عقارك ووصل إلى عدد أكبر من المهتمين.</p></div><button class="goldbtn" onclick="toast('صفحة إضافة العقار قيد الإنشاء')">+ إضافة عقار</button></div>
+<div class="results-tools"><button id="favoritesOnly">المفضلة</button><button id="mineOnly">إعلاناتي</button><button id="installApp">إضافة إلى الهاتف</button><button id="moreResults" hidden>تحميل المزيد</button></div>
+<div class="cta" id="add"><div><h3>عقارتكم ... خيارات أفضل في سوريا</h3><p>سوّق عقارك ووصل إلى عدد أكبر من المهتمين.</p></div><button class="goldbtn" data-add>+ إضافة عقار</button></div>
 </section>
 
-<footer id="about"><div class="foot"><div><b>عقارتكم</b><div>منصة العقارات السورية</div></div><div><a href="#">الرئيسية</a><a href="#sale">بيع</a><a href="#rent">إيجار</a><a href="#add">أضف عقارك</a><a href="#">تواصل معنا</a></div><div>© 2026 عقارتكم</div></div></footer>
-<div class="toast" id="toast"></div>
-<script>
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',2600)}
-function setMode(el,mode){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');toast('الوضع: '+mode)}
-function favorite(el){el.textContent=el.textContent==='♡'?'♥':'♡';toast(el.textContent==='♥'?'تمت إضافة العقار للمفضلة':'تمت إزالة العقار من المفضلة')}
-function search(){const c=document.getElementById('city').value,t=document.getElementById('type').value;if(c==='اختر المحافظة'&&t==='اختر نوع العقار')toast('اختر المحافظة أو نوع العقار للبحث');else toast('جاري البحث عن العقارات...')}
-</script>
-</body>
-</html>
+<footer id="about"><div class="foot"><div><b>عقارتكم</b><div>منصة العقارات السورية</div></div><div><a href="#">الرئيسية</a><a href="#sale">بيع</a><a href="#rent">إيجار</a><a href="#add">أضف عقارك</a></div><div>© 2026 عقارتكم</div></div></footer>
+<div class="toast" id="toast" role="status"></div>
+<dialog id="accountDialog" aria-labelledby="accountTitle"><button class="close" data-close aria-label="إغلاق">×</button><h2 id="accountTitle">تسجيل الدخول</h2>
+<form id="accountForm"><label id="nameLabel" hidden>الاسم<input name="name" maxlength="80" minlength="2" autocomplete="name"></label><label>البريد الإلكتروني<input type="email" name="email" required maxlength="254" autocomplete="email" dir="ltr"></label><label>كلمة المرور<input type="password" name="password" required minlength="10" maxlength="128" autocomplete="current-password" dir="ltr"></label><small>10 أحرف على الأقل.</small><p class="error" id="accountError" role="alert"></p><button class="goldbtn" type="submit">دخول</button><button type="button" id="switchAccount">إنشاء حساب جديد</button></form></dialog>
+<dialog id="propertyDialog" aria-labelledby="propertyTitle"><button class="close" data-close aria-label="إغلاق">×</button><h2 id="propertyTitle">أضف عقارك</h2><form id="propertyForm">
+<label>عنوان الإعلان<input name="title" required minlength="5" maxlength="120" placeholder="شقة للبيع في المزة"></label>
+<div class="form-grid"><label>المحافظة<select name="city" required></select></label><label>نوع العقار<select name="kind" required></select></label><label>الغرض<select name="mode"><option value="sale">للبيع</option><option value="rent">للإيجار</option></select></label><label>السعر بالدولار (شهري للإيجار)<input name="price" type="number" min="1" max="1000000000000" required></label><label>المساحة بالمتر المربع<input name="area" type="number" min="1" max="100000000" required></label><label>عدد غرف النوم<input name="rooms" type="number" min="0" max="100" value="0" required></label></div>
+<label>وصف العقار<textarea name="description" required minlength="10" maxlength="3000" rows="4"></textarea></label><label>رقم الاتصال وواتساب مع رمز الدولة<input name="phone" type="tel" required maxlength="30" dir="ltr" placeholder="+963…"></label><p class="note">سيظهر اسمك ورقم هاتفك للزوار، ليتمكنوا من التواصل معك مباشرة.</p><label class="consent"><input type="checkbox" required> أوافق على إظهار اسمي ورقم هاتفي في الإعلان.</label><p class="error" id="propertyError" role="alert"></p><button class="goldbtn" type="submit">نشر الإعلان</button></form></dialog>
+<dialog id="detailsDialog" aria-labelledby="detailsTitle"><button class="close" data-close aria-label="إغلاق">×</button><div id="detailsBody"></div></dialog>
+<dialog id="deleteDialog" aria-labelledby="deleteTitle"><h2 id="deleteTitle">حذف الإعلان؟</h2><p>سيُزال الإعلان من قائمة العقارات.</p><button id="confirmDelete" class="danger">حذف الإعلان</button><button data-close>إلغاء</button><p id="deleteError" role="alert"></p></dialog>
+
+<dialog id="installDialog" aria-labelledby="installTitle"><button class="close" data-close aria-label="إغلاق">×</button><h2 id="installTitle">عقارتكم على هاتفك</h2><p>على آيفون: افتح الموقع في Safari، ثم «مشاركة» و«إضافة إلى الشاشة الرئيسية». فعّل «فتح كتطبيق ويب» إذا ظهر الخيار.</p><p>على أندرويد: افتح قائمة المتصفح واختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» إذا كان الخيار متاحًا.</p><p class="note">يلزم الاتصال بالإنترنت لعرض الإعلانات ونشرها وتسجيل الدخول.</p></dialog>
+<script src="app.js" defer></script>
+</body></html>
