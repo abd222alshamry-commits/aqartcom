@@ -399,7 +399,8 @@ function pointInPolygon(lat,lng,poly){
 function haversineKm(a,b,c,d){const R=6371,toRad=x=>Number(x)*Math.PI/180;const dLat=toRad(c-a),dLng=toRad(d-b);const q=Math.sin(dLat/2)**2+Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(Math.min(1,q)));}
 app.post('/api/properties/geo-search',async(req,res)=>{try{
   const b=req.body||{}, poly=Array.isArray(b.polygon)?b.polygon.slice(0,100):null, center=b.center||{}, radius=Math.min(200,Math.max(0,Number(b.radiusKm)||0));
-  const vals=[];const where=["p.status='active'","p.latitude IS NOT NULL","p.longitude IS NOT NULL"];
+  const vals=[];const where=["p.status='active'","p.is_demo=FALSE","p.latitude IS NOT NULL","p.longitude IS NOT NULL"];
+  if(b.office||b.availability==='sold')where.push('FALSE');
   const add=(sql,v)=>{vals.push(v);where.push(sql.replace('?',`$${vals.length}`));};
   if(b.city)add('p.city=?',b.city);if(b.district)add('p.district=?',String(b.district).trim());if(b.type)add('p.type=?',b.type);if(b.mode)add('p.mode=?',b.mode);if(b.rooms&&b.rooms!=='5+')add('p.rooms=?',Number(b.rooms));if(b.rooms==='5+')where.push('p.rooms>=5');
   if(b.minPrice)add('p.price>=?',Number(b.minPrice));if(b.maxPrice)add('p.price<=?',Number(b.maxPrice));
@@ -958,6 +959,8 @@ app.put('/api/me/properties/:id', requireAuth, async (req,res)=>{
     const id=Number(req.params.id);
     const {title,type,mode,city,district='',price,currency='USD',area=null,rooms=null,baths=null,description='',latitude=null,longitude=null}=req.body;
     if(!Number.isInteger(id)||!title||!type||!city||price===''||price===undefined) return res.status(400).json({error:'بيانات العقار غير مكتملة'});
+    if(!['بيع','إيجار'].includes(mode))return res.status(400).json({error:'نوع العملية غير صحيح'});
+    if([area,rooms,baths].some(v=>v!==null&&v!==''&&(!Number.isFinite(Number(v))||Number(v)<0)))return res.status(400).json({error:'المساحة وعدد الغرف والحمامات يجب أن تكون أرقامًا صالحة'});
     const propertyCurrency=String(currency||'USD').toUpperCase();
     if(!FX_SUPPORTED.includes(propertyCurrency)) return res.status(400).json({error:'عملة العقار غير مدعومة'});
     const hasLat=latitude!==null&&latitude!=='',hasLng=longitude!==null&&longitude!=='';
@@ -1071,9 +1074,10 @@ app.get('/api/properties', async (req, res) => {
     const values = []; const where = []; let geoLatParam=null, geoLngParam=null;
     const hasGeo = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && Number.isFinite(Number(radiusKm)) && Number(radiusKm) > 0;
     const add = (sql, value) => { values.push(value); where.push(sql.replace('?', `$${values.length}`)); };
-    where.push("p.status='active'");
+    where.push("p.status='active'", "p.is_demo=FALSE");
+    if(req.query.office||req.query.availability==='sold')where.push('FALSE');
     if (city) add('p.city = ?', city);
-    if (district) add('p.district = ?', String(district).trim());
+    if (district) add('p.district ILIKE ?', '%'+String(district).trim()+'%');
     if (type) add('p.type = ?', type);
     if (mode) add('p.mode = ?', mode);
     // Price filters are interpreted in the customer's selected display currency.
@@ -1130,7 +1134,13 @@ app.get('/api/properties', async (req, res) => {
                p.featured DESC,
                p.created_at DESC
       LIMIT $${limitParam}`, values);
-    res.json({ data: result.rows, display_currency: searchCurrency, marketplace: true, placement: safePlacement, geo: hasGeo ? {lat:Number(lat),lng:Number(lng),radiusKm:Math.min(Number(radiusKm),200)} : null });
+    let output=result.rows;
+    if(req.query.includeOffices==='true'){
+      const imported=await require('./office-search').searchOfficeListings(pool,{...req.query,currency:searchCurrency},getFxRate);
+      output=[...output,...imported].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    }
+    res.set('Cache-Control','no-store');
+    res.json({ data: output, display_currency: searchCurrency, marketplace: true, placement: safePlacement, geo: hasGeo ? {lat:Number(lat),lng:Number(lng),radiusKm:Math.min(Number(radiusKm),200)} : null });
   } catch (error) { console.error(error); res.status(500).json({ error: 'تعذر تحميل العقارات' }); }
 });
 
@@ -1191,7 +1201,7 @@ app.post('/api/office/ads/:id/publish', requireOfficeMember, async(req,res)=>{
 });
 
 app.get('/api/properties/:id', async (req, res) => {
-  try { const result=await pool.query(`UPDATE properties SET views_count=views_count+1 WHERE id=$1 AND status='active' RETURNING *`,[req.params.id]); if(!result.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const owner=await pool.query('SELECT id,name,phone,email,role,created_at FROM users WHERE id=$1',[result.rows[0].owner_id]); const imgs=await pool.query('SELECT id,url,sort_order FROM property_images WHERE property_id=$1 ORDER BY sort_order,id',[req.params.id]); const vids=await pool.query('SELECT id,url,title,source_type,is_primary FROM property_videos WHERE property_id=$1 ORDER BY is_primary DESC,created_at DESC',[req.params.id]); const ad=await pool.query(`SELECT id,placement,priority,title FROM office_ads WHERE property_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW()) ORDER BY priority DESC,budget DESC,created_at DESC LIMIT 1`,[req.params.id]); result.rows[0].images=imgs.rows; result.rows[0].videos=vids.rows; result.rows[0].owner=owner.rows[0]||null; result.rows[0].ad=ad.rows[0]||null; res.json({data:result.rows[0]}); }
+  try { const result=await pool.query(`UPDATE properties SET views_count=views_count+1 WHERE id=$1 AND status='active' AND is_demo=FALSE RETURNING *`,[req.params.id]); if(!result.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const owner=await pool.query('SELECT id,name,phone,email,role,created_at FROM users WHERE id=$1',[result.rows[0].owner_id]); const imgs=await pool.query('SELECT id,url,sort_order FROM property_images WHERE property_id=$1 ORDER BY sort_order,id',[req.params.id]); const vids=await pool.query('SELECT id,url,title,source_type,is_primary FROM property_videos WHERE property_id=$1 ORDER BY is_primary DESC,created_at DESC',[req.params.id]); const ad=await pool.query(`SELECT id,placement,priority,title FROM office_ads WHERE property_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW()) ORDER BY priority DESC,budget DESC,created_at DESC LIMIT 1`,[req.params.id]); result.rows[0].images=imgs.rows; result.rows[0].videos=vids.rows; result.rows[0].owner=owner.rows[0]||null; result.rows[0].ad=ad.rows[0]||null; res.json({data:result.rows[0]}); }
   catch(error){res.status(500).json({error:'تعذر تحميل العقار'});}
 });
 
@@ -1204,6 +1214,8 @@ app.post('/api/properties', requireAuth, async (req, res) => {
     const { title,type,mode='بيع',city,district='',price,currency='USD',area=null,rooms=null,baths=null,description='',latitude=null,longitude=null }=req.body;
     if(!title||!type||!city||price===undefined||price==='') return res.status(400).json({error:'العنوان والنوع والمدينة والسعر حقول مطلوبة'});
     if(!['بيع','إيجار'].includes(mode)) return res.status(400).json({error:'نوع العملية غير صحيح'});
+    if(!['بيع','إيجار'].includes(mode))return res.status(400).json({error:'نوع العملية غير صحيح'});
+    if([area,rooms,baths].some(v=>v!==null&&v!==''&&(!Number.isFinite(Number(v))||Number(v)<0)))return res.status(400).json({error:'المساحة وعدد الغرف والحمامات يجب أن تكون أرقامًا صالحة'});
     const propertyCurrency=String(currency||'USD').toUpperCase();
     if(!FX_SUPPORTED.includes(propertyCurrency)) return res.status(400).json({error:'عملة العقار غير مدعومة'});
     const hasLat=latitude!==null&&latitude!=='',hasLng=longitude!==null&&longitude!=='';
@@ -1803,6 +1815,7 @@ const demoImport=await require('./demo-listings').seedDemoListings(pool);
 if(!demoImport.skipped)console.log('Demo listings imported:',demoImport.created);
 const mareiImport=await require('./marei-listings').seedMareiListings(pool);
 if(!mareiImport.skipped)console.log('Marei references imported:',mareiImport.created);
+await pool.query("UPDATE properties SET status='rejected' WHERE is_demo=TRUE AND status='active'");
 app.listen(port,()=>console.log(`عقارتكم يعمل على http://localhost:${port}`));
 }
 bootstrap().catch(error=>{console.error('Database initialization failed:',error);process.exit(1);});

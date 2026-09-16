@@ -38,11 +38,12 @@ const root=path.resolve(__dirname,'..');
  const login=await post('/api/auth/login',{email:process.env.ADMIN_EMAIL,password:process.env.ADMIN_PASSWORD});
  const unauth=await fetch(base+'/api/admin/einvoices');assert.equal(unauth.status,401);
  const publicListings=await fetch(base+'/api/properties').then(r=>r.json());
- const demos=publicListings.data.filter(p=>p.is_demo);assert.equal(demos.length,10);
- const demoDetails=await fetch(base+'/api/properties/'+demos[0].id).then(r=>r.json());assert.equal(demoDetails.data.owner,null);
- const demoInquiry=await fetch(base+'/api/properties/'+demos[0].id+'/inquiries',{method:'POST',headers,body:JSON.stringify({name:'QA visitor',message:'Should not be sent'})});assert.equal(demoInquiry.status,400);
+ assert.equal(publicListings.data.filter(p=>p.is_demo).length,0);
+ const demos=(await query('SELECT id,status FROM properties WHERE is_demo=TRUE')).rows;assert.equal(demos.length,10);assert.ok(demos.every(p=>p.status==='rejected'));
+ const demoDetails=await fetch(base+'/api/properties/'+demos[0].id);assert.equal(demoDetails.status,404);
+ const demoInquiry=await fetch(base+'/api/properties/'+demos[0].id+'/inquiries',{method:'POST',headers,body:JSON.stringify({name:'QA visitor',message:'Should not be sent'})});assert.equal(demoInquiry.status,404);
  const badLocation=await fetch(base+'/api/properties',{method:'POST',headers,body:JSON.stringify({title:'QA invalid coordinates',type:'شقة',city:'دمشق',price:100,latitude:999,longitude:36})});assert.equal(badLocation.status,400);
- const geo=await fetch(base+'/api/properties/geo-search',{method:'POST',headers,body:JSON.stringify({center:{lat:33.501,lng:36.25},radiusKm:1})}).then(r=>r.json());assert.ok(geo.data.some(p=>p.is_demo));
+ const geo=await fetch(base+'/api/properties/geo-search',{method:'POST',headers,body:JSON.stringify({center:{lat:33.501,lng:36.25},radiusKm:1})}).then(r=>r.json());assert.ok(geo.data.every(p=>!p.is_demo));
  const page=await fetch(base+'/');assert.match(page.headers.get('permissions-policy'),/geolocation=\(self\)/);
 
  const failures=results.filter(x=>x.status>=500&&!(x.path==='/api/me/push/public-key'&&x.status===503)||x.error);

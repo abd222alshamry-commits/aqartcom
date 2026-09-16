@@ -58,9 +58,7 @@ async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BAT
   finally { client.release(); }
 }
 
-function registerOfficeListings(app,pool) {
-  async function respond(req,res,officeKey) {
-    try {
+async function readOfficeListings(pool,officeKey) {
       const result = await pool.query(`SELECT m.id,m.title,m.description,m.external_url,m.advertiser_name,
         m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.media,
         m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
@@ -71,14 +69,28 @@ function registerOfficeListings(app,pool) {
           AND ($2::text IS NULL OR m.raw_data->>'office_key'=$2)
         ORDER BY m.raw_data->>'office_key',(m.raw_data->>'curation_rank')::int,m.id
         LIMIT 25`,[data.snapshot,officeKey||null]);
+  return result.rows.sort((a,b)=>publicationTime(b)-publicationTime(a));
+}
+
+function registerOfficeListings(app,pool) {
+  async function respond(req,res,officeKey) {
+    try {
+      const rows = await readOfficeListings(pool,officeKey);
       res.set('Cache-Control','no-store');
-      const newestFirst = result.rows.sort((a,b) => publicationTime(b) - publicationTime(a));
-      res.json({data:newestFirst,offices:data.offices,observed_at:data.observedAt,
+      res.json({data:rows,offices:data.offices,observed_at:data.observedAt,
         availability:'unconfirmed',source_name:officeKey==='marei'?'مكتب مرعي العقاري':undefined});
     } catch (error) { console.error('Public office listings:',error.message);res.status(500).json({error:'تعذر تحميل إعلانات المكاتب'}); }
   }
   app.get('/api/market/offices',(req,res)=>respond(req,res));
+  app.get('/api/market/listings/:id',async(req,res)=>{
+    try {
+      if(!/^\d+$/.test(req.params.id))return res.status(404).json({error:'الإعلان غير موجود'});
+      const item=(await readOfficeListings(pool)).find(x=>String(x.id)===req.params.id);
+      if(!item)return res.status(404).json({error:'الإعلان غير موجود أو أُخفي'});
+      res.set('Cache-Control','no-store');res.json({data:item,observed_at:data.observedAt});
+    } catch(error){res.status(500).json({error:'تعذر تحميل الإعلان'});}
+  });
   app.get('/api/market/marei',(req,res)=>respond(req,res,'marei'));
 }
 
-module.exports={data,enabledBatch,seedOfficeListings,registerOfficeListings};
+module.exports={data,enabledBatch,seedOfficeListings,registerOfficeListings,readOfficeListings,publicationTime};

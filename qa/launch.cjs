@@ -1,0 +1,76 @@
+// End-to-end API checks against the real app and an isolated PostgreSQL engine.
+'use strict';
+const assert=require('node:assert/strict'),{PGlite}=require('@electric-sql/pglite');
+const Module=require('module'),path=require('path'),fs=require('fs');
+const root=path.resolve(__dirname,'..');
+(async()=>{
+ const db=new PGlite();await db.waitReady;
+ const query=async(sql,args)=>{const r=args?.length?await db.query(sql,args):await db.exec(sql);return Array.isArray(r)?r.at(-1)||{rows:[]}:r};
+ const originalLoad=Module._load;let app,ready;const booted=new Promise(r=>ready=r);
+ Module._load=function(id,...args){if(id==='pg')return{Pool:class{query(...a){return query(...a)}async connect(){return{query,release(){}}}}};const item=originalLoad.call(this,id,...args);if(id==='express'){function factory(){app=item();app.listen=()=>ready();return app}Object.assign(factory,item);return factory}return item};
+ global.setInterval=()=>({unref(){}});global.setTimeout=(fn,ms,...args)=>ms>=1000?{unref(){}}:require('timers').setTimeout(fn,ms,...args);
+ const realFetch=global.fetch;global.fetch=(url,opts)=>String(url).startsWith('http://127.0.0.1:')?realFetch(url,opts):Promise.reject(Error('External requests disabled for isolated QA'));
+ Object.assign(process.env,{ADMIN_EMAIL:'admin@qa.example.test',ADMIN_PASSWORD:'Synthetic-QA-Only-2026!',NODE_ENV:'test',API_RATE_LIMIT_PER_MINUTE:'99999',DEMO_LISTINGS_BATCH:'2026-09-16-ten-listings',MAREI_LISTINGS_BATCH:'2026-09-16-marei-public-references'});
+ require(root+'/server/server.js');await booted;
+ await query("INSERT INTO currency_rates(base_currency,quote_currency,rate) VALUES('USD','USD',1),('USD','SAR',3.75) ON CONFLICT(base_currency,quote_currency) DO UPDATE SET rate=EXCLUDED.rate,fetched_at=NOW()");
+ const server=require('http').createServer(app);await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
+ let count=0;const uploaded=[];
+ async function request(url,{method='GET',body,cookie,expected=200,form}={}){
+  const response=await fetch(base+url,{method,headers:{...(cookie?{cookie}:{}),...(!form&&body?{'content-type':'application/json'}:{})},body:form|| (body?JSON.stringify(body):undefined)});
+  const value=await response.json();assert.equal(response.status,expected,url+': '+JSON.stringify(value));count++;
+  return {value,cookie:response.headers.get('set-cookie')?.split(';')[0],headers:response.headers};
+ }
+ try{
+  await request('/api/admin/overview',{expected:401});await request('/api/properties',{method:'POST',body:{},expected:401});
+  const alice=await request('/api/auth/register',{method:'POST',expected:201,body:{name:'QA Alice',email:'alice@qa.example.test',password:'Only-a-test-password!',role:'admin'}});assert.equal(alice.value.user.role,'user');
+  await request('/api/auth/register',{method:'POST',expected:409,body:{name:'QA Duplicate',email:'ALICE@QA.EXAMPLE.TEST',password:'Only-a-test-password!'}});
+  const bob=await request('/api/auth/register',{method:'POST',expected:201,body:{name:'QA Bob',email:'bob@qa.example.test',password:'Only-a-test-password!'}});
+  await request('/api/admin/users',{cookie:alice.cookie,expected:403});
+  const admin=await request('/api/auth/login',{method:'POST',body:{email:process.env.ADMIN_EMAIL,password:process.env.ADMIN_PASSWORD}});assert.equal(admin.value.user.role,'admin');
+  await request('/api/admin/overview',{cookie:admin.cookie});
+  const initial=(await request('/api/properties?includeOffices=true')).value.data;
+  assert.equal(initial.length,25);assert.ok(initial.every(x=>x.source_kind==='office'&&!x.is_demo));
+  assert.equal(initial[0].offer_number,'493');assert.equal(initial[1].offer_number,'398');
+  const demos=(await query('SELECT id,status FROM properties WHERE is_demo=TRUE')).rows;assert.equal(demos.length,10);assert.ok(demos.every(x=>x.status==='rejected'));
+  await request('/api/properties/'+demos[0].id,{expected:404});
+  assert.equal((await request('/api/properties?includeOffices=true&city='+encodeURIComponent('دمشق'))).value.data.length,0);
+  assert.equal((await request('/api/properties?includeOffices=true&office=john')).value.data.length,5);
+  assert.equal((await request('/api/properties?includeOffices=true&availability=sold')).value.data.length,6);
+  assert.equal((await request('/api/properties?includeOffices=true&availability=unconfirmed')).value.data.length,19);
+  const priced=(await request('/api/properties?includeOffices=true&maxPrice=20000')).value.data;assert.ok(priced.length>0&&priced.every(x=>x.price!=null&&Number(x.price)<=20000));
+  const sar=(await request('/api/properties?includeOffices=true&currency=SAR&maxPrice=75000')).value.data;assert.equal(sar.length,priced.length);assert.ok(sar.every(x=>Number(x.price_display)===Number(x.price)*3.75));
+  const town=(await request('/api/properties?includeOffices=true&district='+encodeURIComponent('مشتى الحلو'))).value.data;assert.equal(town.length,23);assert.ok(town.every(x=>x.district.includes('مشتى الحلو')));
+  assert.equal((await request('/api/properties?includeOffices=true&mode='+encodeURIComponent('إيجار'))).value.data.length,0);
+  assert.equal((await request('/api/properties?includeOffices=true&rooms=3')).value.data.length,0);
+  assert.equal((await request('/api/properties?includeOffices=true&lat=34.86&lng=36.25&radiusKm=5')).value.data.length,0);
+  const externalId=initial[0].market_id;await request('/api/market/listings/'+externalId);
+  await request('/api/admin/market/listings/'+externalId,{method:'PATCH',cookie:admin.cookie,body:{status:'rejected'}});
+  await request('/api/market/listings/'+externalId,{expected:404});assert.equal((await request('/api/properties?includeOffices=true')).value.data.length,24);
+  await request('/api/admin/market/listings/'+externalId,{method:'PATCH',cookie:admin.cookie,body:{status:'published'}});
+  const form={title:'QA disposable apartment',type:'شقة',mode:'بيع',city:'طرطوس',district:'مشتى الحلو',price:32000,currency:'USD',area:120,rooms:3,baths:2,description:'Isolated test record'};
+  const created=(await request('/api/properties',{method:'POST',cookie:alice.cookie,body:form,expected:201})).value.data;
+  assert.equal(created.owner_id,alice.value.user.id);assert.equal(created.latitude,null);
+  const id=created.id;await request('/api/properties/'+id);
+  await request('/api/me/properties/'+id,{method:'PUT',cookie:bob.cookie,body:form,expected:404});
+  await request('/api/me/properties/'+id,{method:'DELETE',cookie:bob.cookie,expected:404});
+  await request('/api/me/properties/'+id,{method:'PUT',cookie:alice.cookie,body:{...form,mode:'invalid'},expected:400});
+  await request('/api/me/properties/'+id,{method:'PUT',cookie:alice.cookie,body:{...form,latitude:34,longitude:null},expected:400});
+  await request('/api/properties',{method:'POST',cookie:alice.cookie,body:{...form,area:-20},expected:400});
+  const edited=(await request('/api/me/properties/'+id,{method:'PUT',cookie:alice.cookie,body:{...form,title:'QA updated apartment',latitude:34.86,longitude:36.25}})).value.data;
+  assert.equal(edited.title,'QA updated apartment');assert.equal(Number(edited.latitude),34.86);
+  const upload=new FormData();upload.append('images',new Blob([fs.readFileSync(root+'/assets/fb-marei-369.jpg')],{type:'image/jpeg'}),'qa-photo.jpg');
+  const photo=(await request('/api/me/properties/'+id+'/images',{method:'POST',cookie:alice.cookie,form:upload,expected:201})).value.data[0];uploaded.push(root+photo.url);
+  assert.equal((await request('/api/properties/'+id)).value.data.images.length,1);
+  const geo=(await request('/api/properties/geo-search',{method:'POST',body:{center:{lat:34.86,lng:36.25},radiusKm:1}})).value.data;
+  assert.equal(geo.length,1);assert.equal(geo[0].id,id);assert.ok(geo.every(x=>!x.is_demo));
+  await request('/api/me/dashboard',{cookie:alice.cookie});
+  const feed=(await request('/api/properties?includeOffices=true')).value.data;assert.equal(feed.length,26);assert.equal(feed[0].id,id);
+  await request('/api/admin/properties/'+id,{method:'PATCH',cookie:admin.cookie,body:{status:'rejected'}});await request('/api/properties/'+id,{expected:404});
+  await request('/api/admin/properties/'+id,{method:'PATCH',cookie:admin.cookie,body:{status:'active'}});await request('/api/properties/'+id);
+  await request('/api/me/properties/'+id,{method:'DELETE',cookie:alice.cookie});await request('/api/properties/'+id,{expected:404});
+  await request('/api/auth/logout',{method:'POST',cookie:alice.cookie,body:{}});await request('/api/me/properties',{cookie:alice.cookie,expected:401});
+  const login=await request('/api/auth/login',{method:'POST',body:{email:'alice@qa.example.test',password:'Only-a-test-password!'}});assert.equal(login.value.user.id,alice.value.user.id);
+  assert.equal((await request('/api/auth/me',{cookie:admin.cookie})).value.user.role,'admin');
+  console.log(JSON.stringify({passed:count,registration:true,loginLogout:true,ownership:true,admin:true,createEditUploadDelete:true,search:true,sourceVisibility:true,demosHidden:true,geo:true}));
+ }finally{await new Promise(r=>server.close(r));await db.close();for(const file of uploaded)fs.rmSync(file,{force:true});}
+})().catch(error=>{console.error(error);process.exitCode=1;});
