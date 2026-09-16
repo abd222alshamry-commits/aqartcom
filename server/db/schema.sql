@@ -1193,3 +1193,26 @@ CREATE TABLE IF NOT EXISTS owner_command_center_events (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_owner_command_center_events_created ON owner_command_center_events(created_at DESC);
+
+-- Fields used by geocoding and property updates.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+-- Membership follows the existing owner/user office assignment model.
+CREATE OR REPLACE VIEW office_members AS
+SELECT id AS user_id,office_id,'active'::text AS status FROM users
+WHERE is_active AND office_id IS NOT NULL AND role IN ('agent','admin')
+UNION
+SELECT o.owner_id AS user_id,o.id AS office_id,'active'::text AS status
+FROM offices o JOIN users u ON u.id=o.owner_id WHERE u.is_active;
+
+CREATE TABLE IF NOT EXISTS hotel_channel_reservation_runs (
+ id BIGSERIAL PRIMARY KEY,
+ hotel_id BIGINT NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
+ provider VARCHAR(30) NOT NULL CHECK(provider IN ('booking','agoda','expedia')),
+ status VARCHAR(30) NOT NULL DEFAULT 'running',
+ processed_count INTEGER NOT NULL DEFAULT 0,
+ last_error TEXT,
+ started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ finished_at TIMESTAMPTZ
+);

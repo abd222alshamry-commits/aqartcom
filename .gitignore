@@ -6,3 +6,6 @@ uploads/
 private_uploads/
 backups/
 *.zip
+
+qa/results.json
+qa/*.log
