@@ -1,0 +1,70 @@
+'use strict';
+
+const data = require('./office-listings-data.json');
+const enabledBatch = '2026-09-16-marei-public-references';
+
+async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BATCH) {
+  if (enabled !== enabledBatch) return {created:0, skipped:true};
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const run = await client.query('INSERT INTO app_seed_runs(key) VALUES($1) ON CONFLICT DO NOTHING RETURNING key',[data.snapshot]);
+    if (!run.rows.length) { await client.query('COMMIT'); return {created:0, skipped:true}; }
+    let created = 0;
+    for (const office of data.offices) {
+      await client.query(`INSERT INTO market_sources(platform,name,page_id,page_url,is_active)
+        VALUES('facebook',$1,$2,$3,FALSE) ON CONFLICT DO NOTHING`,[office.name,office.pageId,office.pageUrl]);
+      const source = (await client.query("SELECT id FROM market_sources WHERE platform='facebook' AND page_id=$1",[office.pageId])).rows[0];
+      for (const item of data.listings.filter(x => x.office === office.key)) {
+        const metadata = {import_batch:data.snapshot,office_key:office.key,offer_number:item.offer,
+          source_published_at:item.date,published_label:item.publishedLabel,curation_rank:item.rank,
+          observed_at:data.observedAt,evidence:'public_facebook_page',availability:item.availability,
+          thumbnail_kind:item.thumbnailKind,video_duration:item.duration};
+        const media = [{type:'image',url:item.thumbnail,alt:'صورة من فيديو '+item.title}];
+        const result = await client.query(`INSERT INTO market_listings(source_id,platform,external_id,external_url,
+          advertiser_name,title,description,phone,whatsapp,city,district,property_type,listing_mode,price,currency,area,media,status,raw_data)
+          VALUES($1,'facebook',$2,$3,$4,$5,$6,$7,$8,'طرطوس',$9,$10,'sale',$11,'USD',$12,$13,'published',$14)
+          ON CONFLICT(platform,external_id) DO UPDATE SET
+            source_id=EXCLUDED.source_id,external_url=EXCLUDED.external_url,advertiser_name=EXCLUDED.advertiser_name,
+            title=EXCLUDED.title,description=EXCLUDED.description,phone=EXCLUDED.phone,whatsapp=EXCLUDED.whatsapp,
+            district=EXCLUDED.district,property_type=EXCLUDED.property_type,price=EXCLUDED.price,
+            currency=EXCLUDED.currency,area=EXCLUDED.area,media=EXCLUDED.media,
+            raw_data=market_listings.raw_data || EXCLUDED.raw_data,updated_at=NOW()
+          RETURNING id`,[source.id,item.id,item.sourceUrl,office.name,item.title,item.description,
+          office.phones[0],office.whatsapp,item.district,item.propertyType,item.price,item.area,JSON.stringify(media),JSON.stringify(metadata)]);
+        created += result.rows.length;
+      }
+    }
+    // Directly observed in the original Facebook post during this review.
+    await client.query(`UPDATE market_listings SET raw_data=raw_data || $1::jsonb,updated_at=NOW()
+      WHERE platform='facebook' AND external_id='1027851283381825'`,
+      [JSON.stringify({availability:'sold',availability_observed_at:data.observedAt})]);
+    await client.query('COMMIT');
+    return {created, skipped:false};
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}
+
+function registerOfficeListings(app,pool) {
+  async function respond(req,res,officeKey) {
+    try {
+      const result = await pool.query(`SELECT m.id,m.title,m.description,m.external_url,m.advertiser_name,
+        m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.media,
+        m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
+        m.raw_data->>'source_published_at' AS source_published_at,m.raw_data->>'published_label' AS published_label,
+        m.raw_data->>'availability' AS availability,m.raw_data->>'video_duration' AS video_duration
+        FROM market_listings m
+        WHERE m.status='published' AND m.raw_data->>'import_batch'=$1
+          AND ($2::text IS NULL OR m.raw_data->>'office_key'=$2)
+        ORDER BY m.raw_data->>'office_key',(m.raw_data->>'curation_rank')::int,m.id
+        LIMIT 25`,[data.snapshot,officeKey||null]);
+      res.set('Cache-Control','no-store');
+      res.json({data:result.rows,offices:data.offices,observed_at:data.observedAt,
+        availability:'unconfirmed',source_name:officeKey==='marei'?'مكتب مرعي العقاري':undefined});
+    } catch (error) { console.error('Public office listings:',error.message);res.status(500).json({error:'تعذر تحميل إعلانات المكاتب'}); }
+  }
+  app.get('/api/market/offices',(req,res)=>respond(req,res));
+  app.get('/api/market/marei',(req,res)=>respond(req,res,'marei'));
+}
+
+module.exports={data,enabledBatch,seedOfficeListings,registerOfficeListings};
