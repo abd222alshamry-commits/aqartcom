@@ -1,0 +1,100 @@
+/* Shared compact controls. Desktop layouts keep their original sizing. */
+.mobile-section-menu > summary,.mobile-nav > summary{display:none}
+@media(max-width:800px){
+  body > header:not(.topbar){gap:8px;padding-inline:12px;font-size:12px}
+  body > header .brand{font-size:18px;flex-shrink:0;gap:5px}
+  body > header .brand b,body > header .brand span{font-size:18px}
+  body > header .brand small{font-size:9px}
+  body > header > div,body > header nav{min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+  body > header button,body > header nav a{font-size:12px;padding:6px 8px;min-height:36px}
+  body > header select{max-width:64px;min-height:34px;font-size:12px}
+  body[data-page="property"] header .brand small,body[data-page="office-growth"] header span{display:none}
+  .topbar .nav #siteNav{width:min(240px,calc(100vw - 24px));left:12px;top:calc(100% + 4px);padding:6px;gap:3px;grid-template-columns:repeat(2,minmax(0,1fr));max-height:min(270px,calc(100dvh - 90px));border-radius:9px}
+  .topbar .nav #siteNav.mobile-open{display:grid}
+  .topbar .nav #siteNav a{min-height:40px;justify-content:center;text-align:center;padding:5px 4px;font-size:11px;line-height:1.5;background:#ffffff08;overflow-wrap:anywhere}
+
+  /* Longer section lists become a compact disclosure instead of several rows. */
+  .mobile-section-menu{min-width:0;margin-bottom:12px;border:1px solid #dce3eb;border-radius:9px;background:#fff;color:#172b3f}
+  .mobile-section-menu > summary,.mobile-nav > summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none;padding:8px 10px;min-height:40px;font:700 12px Cairo,Arial,sans-serif}
+  .mobile-section-menu > summary:after,.mobile-nav > summary:after{content:'⌄';font-size:17px}
+  .mobile-section-menu[open] > summary:after,.mobile-nav[open] > summary:after{content:'⌃'}
+  .mobile-section-menu > summary::-webkit-details-marker,.mobile-nav > summary::-webkit-details-marker{display:none}
+  .mobile-section-menu > .tabs,.mobile-section-menu > .dash-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:0;padding:7px;border:0;max-height:260px;max-height:min(260px,55dvh);overflow:auto;overscroll-behavior:contain}
+  .mobile-section-menu > :is(.tabs,.dash-tabs) button{min-width:0;min-height:40px;margin:0;padding:6px;font:inherit;font-size:12px;white-space:normal;line-height:1.5;border-radius:7px}
+  .mobile-section-menu:not([open]) > :not(summary),.mobile-nav:not([open]) > :not(summary){display:none}
+  .mobile-nav{position:relative}
+  .mobile-nav > summary{border:1px solid #ffffff40;border-radius:7px;color:#fff;min-height:36px;padding:5px 9px}
+  .mobile-nav > .head-actions{position:absolute;left:0;top:calc(100% + 6px);width:min(260px,calc(100vw - 24px));display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:7px;background:#102a43;border:1px solid #ffffff30;border-radius:9px;box-shadow:0 10px 30px #0003;z-index:40}
+  .mobile-nav .head-actions a,.mobile-nav .head-actions button{min-height:40px;padding:6px;font-size:12px;text-align:center;display:grid;place-content:center;line-height:1.5}
+  body[data-page="office"] .layout > aside{gap:5px;padding:6px;max-width:100%;min-width:0}
+  body[data-page="office"] .navbtn{flex:0 0 auto;min-height:38px;padding:6px 9px;margin:0;font-size:12px}
+  :is(.toolbar,.map-toolbar,.finance-toolbar,.geo-actions,.owner64-actions){gap:6px;flex-wrap:wrap;min-width:0}
+  :is(.toolbar,.map-toolbar,.finance-toolbar,.geo-actions,.owner64-actions) :is(input,select,button){min-width:0;max-width:100%;min-height:38px;padding:6px 8px;font-size:13px}
+  .toolbar :is(input,select){flex:1 1 130px;width:auto}
+  .toolbar{padding:8px}
+
+  /* Main search and listing choices stay short without removing any fields. */
+  .searchbox{padding:0 10px 10px}
+  .searchbox form{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding-top:10px}
+  .searchbox label{font-size:11px;line-height:1.6}
+  .searchbox input,.searchbox select{height:38px;margin-top:4px;padding:0 6px;font-size:13px;min-width:0}
+  .searchbox .prices{gap:4px}
+  .searchbox .tab{min-height:38px;padding:7px 4px;font-size:12px}
+  .searchbox .searchbtn{height:38px;font-size:12px}
+  .searchbox #saveSearchBtn{grid-column:1/-1;min-height:34px;font:inherit;font-size:12px;border:1px solid #dce3eb;border-radius:7px;background:#f4f7fa}
+  .listing-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+  .listing-filters label{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;min-width:0;font-size:11px}
+  .listing-filters select{width:100%;min-width:0;height:38px;padding:5px;font-size:12px}
+  .marei-filters{gap:5px;margin:10px 0}
+  .marei-filters button{padding:6px 9px;font-size:11px;min-height:36px}
+  .marei-toolbar{gap:6px;flex-wrap:wrap}
+  .marei-toolbar select{padding:5px;min-height:36px}
+  .marei-pagination{gap:5px;margin-top:18px}
+  .marei-pagination button{min-width:36px;min-height:38px;padding:5px 9px;font-size:12px}
+  .categories{gap:6px;padding:20px 0}
+  .categories i{width:36px;height:36px;border-radius:8px;font-size:20px;margin-bottom:4px}
+  .categories button{font-size:11px}
+  .citygrid{gap:6px}.citygrid button{padding:6px 8px;min-height:38px}
+
+  /* Account choices and the assistant no longer cover most of the screen. */
+  #accountModal .modalbox,#authModal .modalbox{width:min(340px,100%);max-height:82dvh;padding:40px 12px 14px}
+  #accountModal .modalbox{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  #accountModal .modalbox > :is(h2,p,.account-card){grid-column:1/-1;margin:0}
+  #accountModal .account-card{padding:10px;overflow-wrap:anywhere}
+  #accountModal .account-card ~ button{width:100%;margin:0;padding:7px;min-height:40px;font-size:12px}
+  .auth-tabs{gap:6px;margin:10px 0}.auth-tab{padding:7px;min-height:38px;font-size:12px}
+  .assistant-fab{left:10px;bottom:10px;padding:8px 11px;font-size:11px;min-height:38px}
+  .assistant-panel{left:10px;bottom:56px;width:min(280px,calc(100vw - 20px));max-height:60dvh;border-radius:12px}
+  .assistant-head{padding:8px 10px;font-size:12px}.assistant-head small{font-size:10px}
+  .assistant-head button{min-width:32px;min-height:32px;font-size:23px}
+  .assistant-messages{padding:8px;min-height:70px;max-height:150px}
+  .assistant-msg{font-size:12px;padding:7px 8px;line-height:1.6}
+  .assistant-form{padding:7px;gap:5px}.assistant-form input{padding:7px;font-size:14px}
+  .assistant-form button,.assistant-reset{font-size:11px;padding:7px 9px;min-height:34px}
+
+  /* The map remains visible around its compact filter panel. */
+  body[data-page="map-search"] .filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:7px;top:76px;bottom:auto;right:10px;width:min(300px,calc(100vw - 20px));max-height:min(480px,65dvh);padding:10px;border:1px solid #dfe6ec;border-radius:12px;box-shadow:0 12px 36px #0003;visibility:hidden;pointer-events:none;overscroll-behavior:contain}
+  body[data-page="map-search"] .filters.open{visibility:visible;pointer-events:auto}
+  body[data-page="map-search"] .filters > :not(label){grid-column:1/-1}
+  body[data-page="map-search"] .filters h1{font-size:17px}
+  body[data-page="map-search"] .filters > p{font-size:11px;line-height:1.6;margin:0 0 3px}
+  body[data-page="map-search"] .filters label{font-size:11px;min-width:0;margin:0}
+  body[data-page="map-search"] .filters :is(input,select){min-width:0;min-height:36px;padding:6px;margin-top:3px;font-size:12px}
+  body[data-page="map-search"] .filters .tools{gap:5px;margin:0}
+  body[data-page="map-search"] .filters :is(.tools button,.search,.close-filters){padding:6px;font-size:12px;min-height:36px;margin:0}
+  body[data-page="map-search"] .summary{padding:7px;margin:0;font-size:12px}
+  body[data-page="map-search"] .mobile-filters{padding:7px 9px;min-height:38px;font-size:12px}
+
+  body[data-page="hotels"] .hero form{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}
+  body[data-page="hotels"] .hero form > :is(#q,button){grid-column:1/-1}
+  body[data-page="hotels"] .hero :is(input,select,button){min-width:0;height:38px;padding:0 6px;font-size:12px}
+  body[data-page="hotel-partner"] :is(.hero,.toolbar,.tabs,.panel){margin-inline:12px;gap:8px}
+  body[data-page="hotel-partner"] .toolbar select{min-width:0}
+  body[data-page="office-growth"] header{gap:5px;font-size:11px}
+  .office-detail-actions{gap:8px;font-size:12px}
+  .office-detail-actions button{min-height:36px;padding:6px 9px;font-size:12px}
+  .compare-dock{width:max-content;max-width:calc(100vw - 20px);gap:5px;padding:6px}
+  .compare-dock :is(a,button){min-width:0;min-height:38px;padding:6px 8px;font-size:12px}
+  body[data-page="messages"] .head-actions{flex-wrap:wrap;gap:4px}
+  body[data-page="messages"] .head-actions button{min-height:34px;font-size:11px;padding:5px}
+}
