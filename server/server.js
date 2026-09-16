@@ -1104,7 +1104,7 @@ app.get('/api/properties', async (req, res) => {
       ORDER BY CASE WHEN ad.id IS NOT NULL THEN 0 ELSE 1 END,
                COALESCE(ad.priority,0) DESC,
                COALESCE(ad.budget,0) DESC,
-               CASE WHEN $${placementParam}='search' AND ${hasGeo ? 'TRUE' : 'FALSE'} THEN COALESCE(distance_km,999999) ELSE 0 END ASC,
+               ${hasGeo && safePlacement === 'search' ? 'distance_km ASC NULLS LAST,' : ''}
                p.featured DESC,
                p.created_at DESC
       LIMIT $${limitParam}`, values);
