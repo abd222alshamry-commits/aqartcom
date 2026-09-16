@@ -1,0 +1,36 @@
+# Paid resources: review Render's monthly estimate before deploying.
+services:
+  - type: web
+    name: aqartcom-v93
+    runtime: docker
+    repo: https://github.com/abd222alshamry-commits/aqartcom
+    branch: v93-render
+    region: frankfurt
+    plan: 0.5c-512mb
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: aqartcom-files
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aqartcom-db
+          property: connectionString
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: مدير عقاراتكم
+databases:
+  - name: aqartcom-db
+    region: frankfurt
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    ipAllowList: []
