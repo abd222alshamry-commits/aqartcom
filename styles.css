@@ -17,3 +17,14 @@
 
 /* V93: search fields wrap inside the hero on mobile. */
 .hero{height:auto;min-height:485px;padding-bottom:28px}.hero-inner{padding-top:36px}.searchbox{position:relative;top:auto;margin-top:28px}.searchbox form{grid-template-columns:repeat(3,minmax(0,1fr))}.searchbox label{min-width:0}.searchbox .searchbtn{grid-column:auto}.intro{width:100%}.edit-form select,.edit-form input{min-width:0}@media(max-width:800px){.searchbox form{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.searchbox form{grid-template-columns:1fr}.searchbox{padding:0 12px 14px}.tab{width:33.333%}.intro p{font-size:16px}}
+
+/* Dialogs stay inside the viewport and above Leaflet controls. */
+.search-map,.location-picker{isolation:isolate;z-index:0;direction:ltr}
+.modal{z-index:2000;padding:16px;overflow:auto;overscroll-behavior:contain}
+.modalbox{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;padding-top:48px;min-width:0}
+.modalbox:has(.dashboard),.modalbox:has(.edit-form){width:min(920px,100%)}
+.modalclose{position:absolute;left:12px;top:8px;width:36px;height:36px;border:0;border-radius:8px;background:#edf2f7;color:#112842;font-size:26px;cursor:pointer}
+body:has(.modal.open){overflow:hidden}body:has(.modal.open) .assistant-fab,body:has(.modal.open) .assistant-panel{visibility:hidden}
+.toast{z-index:3000}.demo-notice{background:#fff6de;color:#715119;border:1px solid #ebd294;border-radius:10px;padding:12px 16px;line-height:1.8}.demo-notice[hidden]{display:none}
+.property-image .demo-badge{background:#fff6de;color:#715119;z-index:4}.tab{width:auto;flex:1}.tabs{display:flex}.head #all{font:inherit;background:transparent;border:0;color:#173f5f;cursor:pointer}
+@media(max-width:520px){.modal{padding:8px}.modalbox{padding:45px 14px 18px;max-height:calc(100dvh - 16px)}.edit-form{grid-template-columns:1fr}.tab{font-size:12px;width:auto}.search-map{min-height:300px}}

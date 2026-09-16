@@ -27,7 +27,7 @@ const SESSION_DAYS = 30;
 async function bootstrap() {
 await ensureSchema();
 
-app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(), geolocation=(), microphone=(self)');if(isProduction)res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');next();});
+app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('X-Frame-Options','SAMEORIGIN');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(), geolocation=(self), microphone=(self)');if(isProduction)res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');next();});
 const rateBuckets=new Map(); app.use('/api',(req,res,next)=>{const key=req.ip||'unknown',now=Date.now(),windowMs=60000,limit=Number(process.env.API_RATE_LIMIT_PER_MINUTE||180);let b=rateBuckets.get(key);if(!b||now-b.start>windowMs)b={start:now,count:0};b.count++;rateBuckets.set(key,b);if(b.count>limit)return res.status(429).json({error:'طلبات كثيرة، حاول بعد قليل'});next();});
 app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(x=>x.trim()) : (isProduction ? false : true), credentials: true }));
 app.use(express.text({ type: ['application/xml','text/xml','application/*+xml'], limit: '2mb' }));
@@ -98,7 +98,21 @@ async function requireAuth(req, res, next) {
   }
 }
 
-async function ensureAdminFromEnv(){ const email=normalizeEmail(process.env.ADMIN_EMAIL); const password=String(process.env.ADMIN_PASSWORD||''); if(!email||password.length<8)return; const exists=await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1)',[email]); if(exists.rows[0]){await pool.query(`UPDATE users SET role='admin',is_active=TRUE,updated_at=NOW() WHERE id=$1`,[exists.rows[0].id]);return;} const hash=await bcrypt.hash(password,12); await pool.query(`INSERT INTO users(name,email,password_hash,role) VALUES($1,$2,$3,'admin')`,[process.env.ADMIN_NAME||'مدير عقارتكم',email,hash]); }
+async function ensureAdminFromEnv(){
+  const email=normalizeEmail(process.env.ADMIN_EMAIL);
+  if(!email)return;
+  const existing=(await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1)',[email])).rows[0];
+  if(existing){
+    await pool.query("UPDATE users SET role='admin',is_active=TRUE,updated_at=NOW() WHERE id=$1",[existing.id]);
+    console.log('Owner admin ready:',email,'existing account');
+    return;
+  }
+  const password=String(process.env.ADMIN_PASSWORD||'');
+  if(password.length<8){console.warn('Owner admin pending: configured account does not exist and bootstrap password is unavailable');return;}
+  const hash=await bcrypt.hash(password,12);
+  await pool.query("INSERT INTO users(name,email,password_hash,role) VALUES($1,$2,$3,'admin')",[process.env.ADMIN_NAME||'مدير عقارتكم',email,hash]);
+  console.log('Owner admin ready:',email,'initialized account');
+}
 
 async function ensureSchema() {
   const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
@@ -389,7 +403,7 @@ app.post('/api/properties/geo-search',async(req,res)=>{try{
   const add=(sql,v)=>{vals.push(v);where.push(sql.replace('?',`$${vals.length}`));};
   if(b.city)add('p.city=?',b.city);if(b.district)add('p.district=?',String(b.district).trim());if(b.type)add('p.type=?',b.type);if(b.mode)add('p.mode=?',b.mode);if(b.rooms&&b.rooms!=='5+')add('p.rooms=?',Number(b.rooms));if(b.rooms==='5+')where.push('p.rooms>=5');
   if(b.minPrice)add('p.price>=?',Number(b.minPrice));if(b.maxPrice)add('p.price<=?',Number(b.maxPrice));
-  const r=await pool.query(`SELECT p.id,p.title,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.image_url,p.featured,p.latitude,p.longitude,p.created_at FROM properties p WHERE ${where.join(' AND ')} ORDER BY p.featured DESC,p.created_at DESC LIMIT 500`,vals);
+  const r=await pool.query(`SELECT p.id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.image_url,p.featured,p.latitude,p.longitude,p.created_at FROM properties p WHERE ${where.join(' AND ')} ORDER BY p.featured DESC,p.created_at DESC LIMIT 500`,vals);
   let data=r.rows.filter(x=>!poly||pointInPolygon(Number(x.latitude),Number(x.longitude),poly));
   if(Number.isFinite(Number(center.lat))&&Number.isFinite(Number(center.lng))&&radius)data=data.filter(x=>haversineKm(center.lat,center.lng,x.latitude,x.longitude)<=radius);
   const speed={drive:35,walk:4.5,bike:15}[b.commuteMode]||35, minutes=Math.max(0,Number(b.commuteMinutes)||0);
@@ -946,6 +960,9 @@ app.put('/api/me/properties/:id', requireAuth, async (req,res)=>{
     if(!Number.isInteger(id)||!title||!type||!city||price===''||price===undefined) return res.status(400).json({error:'بيانات العقار غير مكتملة'});
     const propertyCurrency=String(currency||'USD').toUpperCase();
     if(!FX_SUPPORTED.includes(propertyCurrency)) return res.status(400).json({error:'عملة العقار غير مدعومة'});
+    const hasLat=latitude!==null&&latitude!=='',hasLng=longitude!==null&&longitude!=='';
+    if(hasLat!==hasLng||(hasLat&&(!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude))||Math.abs(Number(latitude))>90||Math.abs(Number(longitude))>180)))return res.status(400).json({error:'أدخل إحداثيين صالحين للموقع أو اتركهما فارغين'});
+    if(!Number.isFinite(Number(price))||Number(price)<0)return res.status(400).json({error:'السعر غير صالح'});
     const r=await pool.query(`UPDATE properties SET title=$1,type=$2,mode=$3,city=$4,district=$5,price=$6,currency=$7,area=$8,rooms=$9,baths=$10,description=$11,latitude=$12,longitude=$13,updated_at=NOW() WHERE id=$14 AND owner_id=$15 RETURNING *`,[title,type,mode,city,district,Number(price),propertyCurrency,area?Number(area):null,rooms?Number(rooms):null,baths?Number(baths):null,description,latitude!==null&&latitude!==''?Number(latitude):null,longitude!==null&&longitude!==''?Number(longitude):null,id,req.user.id]);
     if(!r.rows[0]) return res.status(404).json({error:'العقار غير موجود أو لا تملك صلاحية تعديله'});
     res.json({data:r.rows[0]});
@@ -1084,7 +1101,7 @@ app.get('/api/properties', async (req, res) => {
     values.push(safeLimit);
     const limitParam=values.length;
     const result = await pool.query(`
-      SELECT p.id,p.owner_id,p.office_id,p.title,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.description,p.image_url,p.featured,p.created_at,p.views_count,p.latitude,p.longitude,
+      SELECT p.id,p.owner_id,p.office_id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.description,p.image_url,p.featured,p.created_at,p.views_count,p.latitude,p.longitude,
         ROUND((p.price * COALESCE(rt.rate,1) / NULLIF(COALESCE(rf.rate,1),0))::numeric, 2) AS price_display,
         $${displayCurrencyParam}::varchar AS display_currency,
         ${geoSelect},
@@ -1179,7 +1196,7 @@ app.get('/api/properties/:id', async (req, res) => {
 });
 
 app.post('/api/properties/:id/inquiries', async (req,res)=>{
-  try { const id=Number(req.params.id); const property=await pool.query('SELECT id FROM properties WHERE id=$1',[id]); if(!property.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const user=await getCurrentUser(req); const name=String(req.body.name||user?.name||'').trim(), phone=String(req.body.phone||user?.phone||'').trim()||null, email=String(req.body.email||user?.email||'').trim()||null, message=String(req.body.message||'').trim(); if(name.length<2||message.length<3) return res.status(400).json({error:'الاسم والرسالة مطلوبان'}); const r=await pool.query('INSERT INTO inquiries(property_id,sender_id,sender_name,sender_phone,sender_email,message) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[id,user?.id||null,name,phone,email,message]); if(user?.id) await recordPropertyEvent(user.id,id,'inquiry').catch(()=>{}); res.status(201).json({data:r.rows[0]}); } catch(e){console.error(e);res.status(500).json({error:'تعذر إرسال الاستفسار'});} 
+  try { const id=Number(req.params.id); const property=await pool.query("SELECT id,is_demo FROM properties WHERE id=$1 AND status='active'",[id]); if(!property.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); if(property.rows[0].is_demo)return res.status(400).json({error:'هذا إعلان تجريبي ولا يستقبل استفسارات حقيقية'}); const user=await getCurrentUser(req); const name=String(req.body.name||user?.name||'').trim(), phone=String(req.body.phone||user?.phone||'').trim()||null, email=String(req.body.email||user?.email||'').trim()||null, message=String(req.body.message||'').trim(); if(name.length<2||message.length<3) return res.status(400).json({error:'الاسم والرسالة مطلوبان'}); const r=await pool.query('INSERT INTO inquiries(property_id,sender_id,sender_name,sender_phone,sender_email,message) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[id,user?.id||null,name,phone,email,message]); if(user?.id) await recordPropertyEvent(user.id,id,'inquiry').catch(()=>{}); res.status(201).json({data:r.rows[0]}); } catch(e){console.error(e);res.status(500).json({error:'تعذر إرسال الاستفسار'});}
 });
 
 app.post('/api/properties', requireAuth, async (req, res) => {
@@ -1189,6 +1206,9 @@ app.post('/api/properties', requireAuth, async (req, res) => {
     if(!['بيع','إيجار'].includes(mode)) return res.status(400).json({error:'نوع العملية غير صحيح'});
     const propertyCurrency=String(currency||'USD').toUpperCase();
     if(!FX_SUPPORTED.includes(propertyCurrency)) return res.status(400).json({error:'عملة العقار غير مدعومة'});
+    const hasLat=latitude!==null&&latitude!=='',hasLng=longitude!==null&&longitude!=='';
+    if(hasLat!==hasLng||(hasLat&&(!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude))||Math.abs(Number(latitude))>90||Math.abs(Number(longitude))>180)))return res.status(400).json({error:'أدخل إحداثيين صالحين للموقع أو اتركهما فارغين'});
+    if(!Number.isFinite(Number(price))||Number(price)<0)return res.status(400).json({error:'السعر غير صالح'});
     const office=await getOfficeForUser(req.user.id);
     if(office){ const sub=await officeSubscription(office.id); if(sub && sub.max_properties>=0){ const count=(await pool.query('SELECT COUNT(*)::int count FROM properties WHERE office_id=$1',[office.id])).rows[0].count; if(count>=sub.max_properties)return res.status(403).json({error:`الباقة تسمح بـ ${sub.max_properties} عقاراً فقط. قم بترقية الباقة.`}); } }
     const result=await pool.query(`INSERT INTO properties (owner_id,office_id,assigned_to,title,type,mode,city,district,price,currency,area,rooms,baths,description,latitude,longitude) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,[req.user.id,office?.id||null,office?.id?req.user.id:null,title,type,mode,city,district,Number(price),propertyCurrency,area?Number(area):null,rooms?Number(rooms):null,baths?Number(baths):null,description,latitude!==null&&latitude!==''?Number(latitude):null,longitude!==null&&longitude!==''?Number(longitude):null]);
@@ -1687,14 +1707,14 @@ const ASSISTANT_TYPES=['شقة','منزل','فيلا','أرض','محل تجار�
 function arDigits(s){return String(s||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}
 function parseMoneyText(text){const t=arDigits(text).replace(/,/g,'');let currency=/دولار|\bUSD\b/i.test(t)?'USD':/ريال|\bSAR\b/i.test(t)?'SAR':/ليرة|\bSYP\b/i.test(t)?'SYP':/يورو|\bEUR\b/i.test(t)?'EUR':null;let m=t.match(/(?:حدود|بحدود|حتى|ميزاني(?:ة|تي)|بسعر|أقل من|لا يتجاوز)\s*(\d+(?:\.\d+)?)\s*(ألف|مليون)?/i)||t.match(/(\d+(?:\.\d+)?)\s*(ألف|مليون)?\s*(?:دولار|ريال|ليرة|يورو|USD|SAR|SYP|EUR)/i);if(!m)return {currency};let n=Number(m[1]);if(m[2]==='ألف')n*=1000;if(m[2]==='مليون')n*=1000000;return {maxPrice:n,currency}}
 function parseAssistantQuery(text){const t=arDigits(text).trim(), f={};const city=ASSISTANT_CITIES.find(x=>t.includes(x));if(city)f.city=city;const type=ASSISTANT_TYPES.find(x=>t.includes(x));if(type)f.type=type;if(/إيجار|استئجار|استأجر|للإيجار/.test(t))f.mode='إيجار';else if(/شراء|اشتري|أشتري|للبيع|بيع/.test(t))f.mode='بيع';const rooms=t.match(/(\d+)\s*(?:غرف|غرفة)/);if(rooms)f.rooms=Number(rooms[1]);const area=t.match(/(?:مساحة|حوالي)\s*(\d+)\s*(?:م|متر)/);if(area)f.minArea=Math.round(Number(area[1])*.8),f.maxArea=Math.round(Number(area[1])*1.2);Object.assign(f,parseMoneyText(t));return f}
-async function assistantSearch(filters){let w=["p.status='active'"],v=[];const add=(sql,val)=>{v.push(val);w.push(sql.replace('?',`$${v.length}`))};if(filters.city)add('p.city=?',filters.city);if(filters.type)add('p.type=?',filters.type);if(filters.mode)add('p.mode=?',filters.mode);if(filters.rooms){v.push(filters.rooms);w.push(`p.rooms >= $${v.length}`)}if(filters.minArea){v.push(filters.minArea);w.push(`p.area >= $${v.length}`)}if(filters.maxArea){v.push(filters.maxArea);w.push(`p.area <= $${v.length}`)}if(filters.maxPrice){v.push(filters.maxPrice);w.push(`p.price <= $${v.length}`)}if(filters.currency){v.push(filters.currency);w.push(`UPPER(COALESCE(p.currency,'USD'))=$${v.length}`)}let r=await pool.query(`SELECT p.id,p.title,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.image_url,COALESCE(ai.recommendation_score,50) market_score,ai.pricing_label,ai.price_gap_pct FROM properties p LEFT JOIN property_ai_scores ai ON ai.property_id=p.id WHERE ${w.join(' AND ')} ORDER BY CASE WHEN ai.pricing_label='below_market' THEN 0 ELSE 1 END,COALESCE(ai.recommendation_score,50) DESC,p.featured DESC,p.created_at DESC LIMIT 8`,v);return r.rows}
+async function assistantSearch(filters){let w=["p.status='active'"],v=[];const add=(sql,val)=>{v.push(val);w.push(sql.replace('?',`$${v.length}`))};if(filters.city)add('p.city=?',filters.city);if(filters.type)add('p.type=?',filters.type);if(filters.mode)add('p.mode=?',filters.mode);if(filters.rooms){v.push(filters.rooms);w.push(`p.rooms >= $${v.length}`)}if(filters.minArea){v.push(filters.minArea);w.push(`p.area >= $${v.length}`)}if(filters.maxArea){v.push(filters.maxArea);w.push(`p.area <= $${v.length}`)}if(filters.maxPrice){v.push(filters.maxPrice);w.push(`p.price <= $${v.length}`)}if(filters.currency){v.push(filters.currency);w.push(`UPPER(COALESCE(p.currency,'USD'))=$${v.length}`)}let r=await pool.query(`SELECT p.id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.image_url,COALESCE(ai.recommendation_score,50) market_score,ai.pricing_label,ai.price_gap_pct FROM properties p LEFT JOIN property_ai_scores ai ON ai.property_id=p.id WHERE ${w.join(' AND ')} ORDER BY CASE WHEN ai.pricing_label='below_market' THEN 0 ELSE 1 END,COALESCE(ai.recommendation_score,50) DESC,p.featured DESC,p.created_at DESC LIMIT 8`,v);return r.rows}
 app.post('/api/property-assistant/chat',async(req,res)=>{try{const text=String(req.body?.message||'').trim();if(text.length<2)return res.status(400).json({error:'اكتب طلبك العقاري'});const user=await getCurrentUser(req);const parsed=parseAssistantQuery(text);let sid=Number(req.body?.session_id)||null, previous={};if(sid){const q=(await pool.query(`SELECT * FROM property_assistant_sessions WHERE id=$1 AND (user_id IS NULL OR user_id=$2)`,[sid,user?.id||null])).rows[0];if(q)previous=q.parsed_filters||{};else sid=null}const filters={...previous,...parsed};const results=await assistantSearch(filters);const missing=[];if(!filters.city)missing.push('المدينة');if(!filters.mode)missing.push('شراء أم إيجار');if(!filters.type)missing.push('نوع العقار');let reply;if(results.length){reply=`وجدت ${results.length} خيارات مناسبة${filters.city?' في '+filters.city:''}. رتبتها مع إعطاء أفضلية للفرص السعرية وتحليل السوق الداخلي.`}else if(missing.length){reply=`لم أجد نتيجة دقيقة بعد. أخبرني ${missing.slice(0,2).join(' و')} لأبحث بشكل أفضل.`}else reply='لم أجد عقاراً مطابقاً تماماً. جرّب رفع الميزانية أو توسيع المنطقة أو تغيير عدد الغرف.';if(!sid){sid=(await pool.query(`INSERT INTO property_assistant_sessions(user_id,last_query,parsed_filters,result_count) VALUES($1,$2,$3,$4) RETURNING id`,[user?.id||null,text,JSON.stringify(filters),results.length])).rows[0].id}else await pool.query(`UPDATE property_assistant_sessions SET last_query=$1,parsed_filters=$2,result_count=$3,updated_at=NOW() WHERE id=$4`,[text,JSON.stringify(filters),results.length,sid]);await pool.query(`INSERT INTO property_assistant_messages(session_id,role,content,metadata) VALUES($1,'user',$2,$3),($1,'assistant',$4,$5)`,[sid,text,JSON.stringify({parsed}),reply,JSON.stringify({filters,result_ids:results.map(x=>x.id)})]);res.json({session_id:sid,reply,filters,missing,results,disclaimer:'المساعد يفهم الطلب ويبحث في بيانات عقارتكم؛ ترتيب السعر وتحليل السوق إرشاديان وليسا تقييماً عقارياً رسمياً.'})}catch(e){console.error(e);res.status(500).json({error:'تعذر تنفيذ البحث الذكي'})}});
 app.post('/api/property-assistant/reset',async(req,res)=>{res.json({ok:true})});
 
 // V42 full property advisor -------------------------------------------------
 async function advisorProperties(ids){
  const clean=[...new Set((ids||[]).map(Number).filter(Number.isFinite))].slice(0,5); if(!clean.length)return [];
- const r=await pool.query(`SELECT p.id,p.title,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.views_count,p.description,p.image_url,
+ const r=await pool.query(`SELECT p.id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.views_count,p.description,p.image_url,
  CASE WHEN p.area>0 THEN p.price/p.area ELSE NULL END price_per_sqm, ai.estimated_price,ai.market_price_per_sqm,ai.price_gap_pct,ai.valuation_confidence,ai.pricing_label,COALESCE(ai.recommendation_score,50) market_score
  FROM properties p LEFT JOIN property_ai_scores ai ON ai.property_id=p.id WHERE p.status='active' AND p.id=ANY($1::bigint[])`,[clean]);
  return clean.map(id=>r.rows.find(x=>Number(x.id)===id)).filter(Boolean);
@@ -1777,6 +1797,8 @@ await require('./request-messaging-center')(app,{pool,getCurrentUser});
 require('./chatgpt-manager')(app,{pool,getCurrentUser,requireAdmin});
 app.use((_req,res)=>res.status(404).json({error:'المسار غير موجود'}));
 await ensureAdminFromEnv();
+const demoImport=await require('./demo-listings').seedDemoListings(pool);
+if(!demoImport.skipped)console.log('Demo listings imported:',demoImport.created);
 app.listen(port,()=>console.log(`عقارتكم يعمل على http://localhost:${port}`));
 }
 bootstrap().catch(error=>{console.error('Database initialization failed:',error);process.exit(1);});

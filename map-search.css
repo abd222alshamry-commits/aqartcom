@@ -5,3 +5,5 @@ html{height:100%}body{height:100vh;height:100dvh;display:flex;flex-direction:col
 header{flex:0 0 68px;min-width:0}main{flex:1;min-height:0;height:auto;grid-template-columns:380px minmax(0,1fr)}
 .map-wrap,#map{min-width:0;min-height:0;width:100%}.leaflet-container{direction:ltr}
 @media(max-width:800px){header{padding:0 12px}.view-actions{gap:4px}.view-actions a,.view-actions button{padding:7px 8px;font-size:13px}.filters{max-height:calc(100dvh - 68px)}.map-wrap{height:100%}}
+
+.map-wrap{isolation:isolate}.close-filters{display:none}@media(max-width:800px){.close-filters{display:block;border:0;background:#102a43;color:#fff;border-radius:8px;padding:9px;font:inherit;margin-bottom:12px;width:100%}}
