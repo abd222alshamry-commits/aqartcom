@@ -6,13 +6,22 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function sourceUrl(value){try{const url=new URL(value);return url.protocol==='https:'&&url.hostname==='www.facebook.com'?url.href:null}catch{return null}}
   const phone=value=>/^\+\d{8,15}$/.test(value||'')?value:null;
-  let listings=[],offices=[],selected='all';
+  const pagination=document.getElementById('mareiPagination'),pageSummary=document.getElementById('mareiPageSummary');
+  const pageSize=10;
+  let listings=[],offices=[],selected='all',page=1;
   function render(){
     const visible=listings.filter(p=>(selected==='all'||p.office_key===selected)&&(availability.value==='all'||p.availability===availability.value));
     document.getElementById('mareiCount').textContent=visible.length+' إعلانًا';
     filters.innerHTML=[{key:'all',name:'جميع المكاتب'},...offices].map(o=>`<button type="button" data-office="${esc(o.key)}" aria-pressed="${selected===o.key}">${esc(o.name)} <span>${listings.filter(p=>o.key==='all'||p.office_key===o.key).length}</span></button>`).join('');
-    const ordered=offices.flatMap(o=>visible.filter(p=>p.office_key===o.key));
-    host.innerHTML=ordered.map(p=>{
+    const pageCount=Math.max(1,Math.ceil(visible.length/pageSize));
+    page=Math.min(page,pageCount);
+    const start=(page-1)*pageSize,end=Math.min(start+pageSize,visible.length);
+    pageSummary.textContent=visible.length?`عرض ${start+1}–${end} من ${visible.length} إعلانًا · الأحدث أولًا`:'لا توجد إعلانات مطابقة';
+    pagination.hidden=pageCount<=1;
+    pagination.innerHTML=`<button type="button" data-page="${page-1}" ${page===1?'disabled':''}>السابق</button>`+
+      Array.from({length:pageCount},(_,i)=>`<button type="button" data-page="${i+1}" aria-label="الصفحة ${i+1}" ${page===i+1?'aria-current="page"':''}>${i+1}</button>`).join('')+
+      `<button type="button" data-page="${page+1}" ${page===pageCount?'disabled':''}>التالي</button>`;
+    host.innerHTML=visible.slice(start,end).map(p=>{
       const url=sourceUrl(p.external_url),sold=p.availability==='sold',tel=phone(p.phone),wa=phone(p.whatsapp);
       const thumb=(Array.isArray(p.media)?p.media:[]).find(m=>/^\/assets\/fb-[a-z0-9-]+\.jpg$/.test(m.url||''));
       return `<article class="marei-card${sold?' marei-sold':''}">
@@ -33,8 +42,16 @@
     }).join('')||'<p class="marei-empty">لا توجد إعلانات مطابقة لهذا الاختيار.</p>';
     host.querySelectorAll('.marei-preview img').forEach(img=>img.addEventListener('error',()=>{img.hidden=true;img.parentElement.classList.add('marei-no-image');},{once:true}));
   }
-  filters.addEventListener('click',event=>{const button=event.target.closest('button[data-office]');if(button){selected=button.dataset.office;render();}});
-  availability.addEventListener('change',render);
+  filters.addEventListener('click',event=>{const button=event.target.closest('button[data-office]');if(button){selected=button.dataset.office;page=1;render();}});
+  availability.addEventListener('change',()=>{page=1;render();});
+  pagination.addEventListener('click',event=>{
+    const button=event.target.closest('button[data-page]');
+    if(!button||button.disabled||Number(button.dataset.page)===page)return;
+    page=Number(button.dataset.page);render();
+    pageSummary.setAttribute('tabindex','-1');
+    pageSummary.focus({preventScroll:true});
+    pageSummary.scrollIntoView({block:'start',behavior:'auto'});
+  });
   async function load(){
     try {
       const response=await fetch('/api/market/offices');

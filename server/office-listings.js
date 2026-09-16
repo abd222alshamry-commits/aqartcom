@@ -3,6 +3,19 @@
 const data = require('./office-listings-data.json');
 const enabledBatch = '2026-09-16-marei-public-references';
 
+// Relative Facebook dates are anchored to the review, never to today's date.
+// This value is only an ordering key; it is not presented as an exact post time.
+function publicationTime(item) {
+  const absolute = Date.parse(item.source_published_at || '');
+  if (Number.isFinite(absolute)) return absolute;
+  const label = String(item.published_label || '').replace(/[٠-٩]/g, digit => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
+  const relative = label.match(/^منذ (?:(\d+) )?(ساعات|ساعة|ساعتين|أيام|يومين|يوم)(?:\s|$)/);
+  if (!relative) return 0;
+  const amount = relative[1] ? Number(relative[1]) : /ين$/.test(relative[2]) ? 2 : 1;
+  const unit = relative[2].startsWith('سا') ? 3600000 : 86400000;
+  return Date.parse(data.observedAt) - amount * unit;
+}
+
 async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BATCH) {
   if (enabled !== enabledBatch) return {created:0, skipped:true};
   const client = await pool.connect();
@@ -59,7 +72,8 @@ function registerOfficeListings(app,pool) {
         ORDER BY m.raw_data->>'office_key',(m.raw_data->>'curation_rank')::int,m.id
         LIMIT 25`,[data.snapshot,officeKey||null]);
       res.set('Cache-Control','no-store');
-      res.json({data:result.rows,offices:data.offices,observed_at:data.observedAt,
+      const newestFirst = result.rows.sort((a,b) => publicationTime(b) - publicationTime(a));
+      res.json({data:newestFirst,offices:data.offices,observed_at:data.observedAt,
         availability:'unconfirmed',source_name:officeKey==='marei'?'مكتب مرعي العقاري':undefined});
     } catch (error) { console.error('Public office listings:',error.message);res.status(500).json({error:'تعذر تحميل إعلانات المكاتب'}); }
   }
