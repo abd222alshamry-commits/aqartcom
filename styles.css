@@ -31,4 +31,13 @@ body:has(.modal.open){overflow:hidden}body:has(.modal.open) .assistant-fab,body:
 
 /* Compact, readable header controls on small screens. */
 .topbar .actions #login,.topbar .actions #fav{border:1px solid #ffffff40;border-radius:7px;background:#ffffff0d;color:#fff;padding:8px 10px;white-space:nowrap}.topbar #displayCurrency{border:1px solid #ffffff40;border-radius:6px;background:#fff;color:#112842;padding:5px;max-width:70px}
-@media(max-width:520px){.topbar{height:auto;min-height:64px}.topbar .nav{width:calc(100% - 24px);height:auto;min-height:64px;gap:8px;justify-content:space-between;flex-wrap:wrap;padding:8px 0}.topbar .brand{min-width:0;gap:6px}.topbar .brand b{font-size:18px}.topbar .brand small{display:none}.topbar .logo{width:31px;height:31px;font-size:23px;border-radius:8px}.topbar .actions{gap:4px;min-width:0;max-width:100%}.topbar .actions #login{font-size:10px;padding:7px 6px;max-width:90px;overflow:hidden;text-overflow:ellipsis;min-height:34px}.topbar .actions #fav{font-size:11px;padding:7px 5px;min-height:34px}.topbar #displayCurrency{font-size:10px;padding:5px 1px;width:46px;min-height:32px}.topbar .actions #menu{font-size:23px;padding:0 2px}.topbar .nav nav{top:64px!important}.intro p{overflow-wrap:anywhere}}
+@media(max-width:520px){.topbar{height:auto;min-height:64px}.topbar .nav{width:calc(100% - 24px);height:auto;min-height:64px;gap:8px;justify-content:space-between;flex-wrap:wrap;padding:8px 0}.topbar .brand{min-width:0;gap:6px}.topbar .brand b{font-size:18px}.topbar .brand small{display:none}.topbar .logo{width:31px;height:31px;font-size:23px;border-radius:8px}.topbar .actions{gap:4px;min-width:0;max-width:100%}.topbar .actions #login{font-size:10px;padding:7px 6px;max-width:90px;overflow:hidden;text-overflow:ellipsis;min-height:34px}.topbar .actions #fav{font-size:11px;padding:7px 5px;min-height:34px}.topbar #displayCurrency{font-size:10px;padding:5px 1px;width:46px;min-height:32px}.topbar .actions #menu{font-size:23px;padding:0 2px}.intro p{overflow-wrap:anywhere}}
+
+/* Small corner menu; the desktop navigation keeps its normal layout. */
+@media(max-width:800px){
+  .topbar .nav #siteNav{position:absolute;top:calc(100% + 6px);left:14px;right:auto;width:min(232px,calc(100vw - 28px));max-height:calc(100vh - 100px);max-height:min(440px,calc(100dvh - 100px));overflow-y:auto;overscroll-behavior:contain;flex-direction:column;justify-content:flex-start;gap:2px;padding:8px;background:#112842;border:1px solid #ffffff24;border-radius:12px;box-shadow:0 12px 32px #07182a40}
+  .topbar .nav #siteNav.mobile-open{display:flex}
+  .topbar .nav #siteNav a{display:flex;align-items:center;min-height:40px;padding:8px 12px;font-size:12px;line-height:1.5;border:0;border-radius:6px}
+  .topbar .nav #siteNav a:hover,.topbar .nav #siteNav a:focus-visible{background:#ffffff12;outline:2px solid #e1ad36;outline-offset:-2px}
+  .topbar .actions #menu[aria-expanded="true"]{color:#e1ad36}
+}
