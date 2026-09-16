@@ -1338,6 +1338,8 @@ app.delete('/api/admin/properties/:id', requireAdmin, async (req,res)=>{ const r
 app.get('/api/admin/inquiries', requireAdmin, async (_req,res)=>{ const r=await pool.query(`SELECT i.*,p.title property_title,u.name owner_name FROM inquiries i JOIN properties p ON p.id=i.property_id LEFT JOIN users u ON u.id=p.owner_id ORDER BY i.created_at DESC LIMIT 300`);res.json({data:r.rows}); });
 
 
+require('./marei-listings').registerMareiListings(app,pool);
+
 // ===== مراقبة السوق العقاري السوري / Meta =====
 function marketToken(){ return process.env.META_MARKET_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''; }
 function normalizeMarketText(v){ return String(v||'').replace(/\s+/g,' ').trim(); }
@@ -1799,6 +1801,8 @@ app.use((_req,res)=>res.status(404).json({error:'المسار غير موجود'
 await ensureAdminFromEnv();
 const demoImport=await require('./demo-listings').seedDemoListings(pool);
 if(!demoImport.skipped)console.log('Demo listings imported:',demoImport.created);
+const mareiImport=await require('./marei-listings').seedMareiListings(pool);
+if(!mareiImport.skipped)console.log('Marei references imported:',mareiImport.created);
 app.listen(port,()=>console.log(`عقارتكم يعمل على http://localhost:${port}`));
 }
 bootstrap().catch(error=>{console.error('Database initialization failed:',error);process.exit(1);});
