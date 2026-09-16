@@ -1,0 +1,8 @@
+.advertiser-number{display:block;width:fit-content;margin:16px auto;font-size:22px;font-weight:800;color:#102a43;text-decoration:underline;text-underline-offset:5px}
+.advertiser-contact-dock{display:none}
+@media(max-width:850px){
+ .advertiser-contact-dock{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:25;gap:10px;background:#fff;padding:12px 16px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -3px 16px #102a4322}
+ .advertiser-contact-dock a{flex:1;text-align:center;border-radius:9px;padding:13px 6px;text-decoration:none;font-weight:800;font-size:16px;color:#fff}
+ .advertiser-contact-dock .call{background:#102a43}.advertiser-contact-dock .whatsapp{background:#187b46}
+ .has-advertiser-contact{padding-bottom:160px}.has-advertiser-contact .compare-dock{bottom:calc(86px + env(safe-area-inset-bottom));width:max-content;max-width:95%}
+}

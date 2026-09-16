@@ -1,27 +1,17 @@
 {
-  "id": "./",
-  "name": "عقارتكم — منصة العقارات السورية",
-  "short_name": "عقارتكم",
-  "description": "بيع وشراء وإيجار العقارات والتواصل المباشر مع المعلنين",
-  "lang": "ar",
-  "dir": "rtl",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#102844",
-  "theme_color": "#102844",
-  "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+  "name":"عقارتكم - منصة العقارات السورية",
+  "short_name":"عقارتكم",
+  "description":"ابحث واشترِ وبِع واستأجر العقارات وتابع خدمات عقارتكم من الجوال.",
+  "lang":"ar","dir":"rtl","start_url":"/?source=pwa","scope":"/","display":"standalone","orientation":"any",
+  "background_color":"#ffffff","theme_color":"#111827",
+  "categories":["business","lifestyle"],
+  "shortcuts":[
+    {"name":"البحث عن عقار","short_name":"بحث","url":"/#listings"},
+    {"name":"أضف عقارك","short_name":"إضافة عقار","url":"/#add"},
+    {"name":"الفنادق","short_name":"الفنادق","url":"/hotels.html"}
+  ],
+  "icons":[
+    {"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]
 }

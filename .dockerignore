@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+!.env.example
+uploads
+private_uploads
+backups
+mobile
+tests
+*.zip

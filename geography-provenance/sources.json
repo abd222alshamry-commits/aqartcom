@@ -1,0 +1,91 @@
+[
+  {
+    "id": "geoboundaries-syr",
+    "title": "geoBoundaries Syrian Arab Republic Administrative Boundaries",
+    "url": "https://www.geoboundaries.org/countryDownloads.html",
+    "license": "CC BY 3.0 IGO",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/igo/",
+    "status": "approved",
+    "fields": [
+      "boundaries",
+      "administrativeRelationships",
+      "names",
+      "derivedArea",
+      "derivedCentroid"
+    ],
+    "notes": "Preferred seed source for reusable administrative boundary references. Current Syria ADM1, ADM2, and ADM3 gbOpen sources are UN OCHA via HDX, distributed through geoBoundaries. Import manifests record exact API URLs."
+  },
+  {
+    "id": "geonames-sy",
+    "title": "GeoNames Syrian Arab Republic Gazetteer Extract",
+    "url": "https://download.geonames.org/export/dump/SY.zip",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "status": "approved",
+    "fields": [
+      "names",
+      "alternateNames",
+      "featureCodes",
+      "coordinates",
+      "administrativeRelationships"
+    ],
+    "notes": "Useful for place names, alternate names, coordinates, and feature IDs."
+  },
+  {
+    "id": "wikidata",
+    "title": "Wikidata",
+    "url": "https://www.wikidata.org/wiki/Wikidata:Licensing",
+    "license": "CC0-1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "status": "approved",
+    "fields": ["externalIds", "names", "aliases", "coordinates", "area", "population"],
+    "notes": "Useful for public identifiers and cross-checking."
+  },
+  {
+    "id": "hdx-syr-admin-boundaries",
+    "title": "Syrian Arab Republic - Subnational Administrative Boundaries",
+    "url": "https://data.humdata.org/dataset/cod-ab-syr",
+    "license": "CC BY 3.0 IGO",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/igo/",
+    "status": "approved",
+    "fields": [
+      "boundaries",
+      "administrativeRelationships",
+      "names",
+      "coordinates",
+      "area",
+      "pCodes"
+    ],
+    "notes": "Direct HDX/OCHA COD-AB source for Syria ADM0-ADM3 boundaries. Used when the direct OCHA package is newer or more specific than the geoBoundaries mirror."
+  },
+  {
+    "id": "hdx-syr-populated-places",
+    "title": "Syrian Arab Republic: Populated Places",
+    "url": "https://data.humdata.org/dataset/syrian-arab-republic-pop-places",
+    "license": "CC BY 3.0 IGO",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/igo/",
+    "status": "approved",
+    "fields": ["names", "coordinates", "administrativeRelationships", "externalIds", "pCodes"],
+    "notes": "UN OCHA Syria populated places dataset. The initial locality seed uses Community rows only; Neighbourhood rows are deferred until the schema intentionally supports neighbourhood-level records."
+  },
+  {
+    "id": "uscb-syria-population",
+    "title": "Syria Subnational Population and Housing Data Tables with Administrative Boundaries, Based on National Census and Surveys",
+    "url": "https://data.humdata.org/dataset/syria-subnational-boundaries-and-tabular-data",
+    "license": "CC BY",
+    "licenseUrl": "http://www.opendefinition.org/licenses/cc-by",
+    "status": "approved",
+    "fields": ["population", "names", "administrativeRelationships", "externalIds", "pCodes"],
+    "notes": "U.S. Census Bureau tables distributed through HDX. The import uses Age-Sex BTOTL as the 2004 census population for ADM1, ADM2, and ADM3 records, and the Population Estimates sheet for ADM1 2011, 2014, and 2016 estimates."
+  },
+  {
+    "id": "openstreetmap",
+    "title": "OpenStreetMap",
+    "url": "https://www.openstreetmap.org/copyright",
+    "license": "ODbL-1.0",
+    "licenseUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "status": "restricted",
+    "fields": ["names", "coordinates", "geometry", "administrativeRelationships"],
+    "notes": "Restricted to review/comparison unless an ODbL-compatible release approach is approved."
+  }
+]

@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.*
+!.env.example
+uploads/
+private_uploads/
+backups/
+*.zip

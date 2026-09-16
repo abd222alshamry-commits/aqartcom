@@ -1,0 +1,28 @@
+{
+  "name": "aqartkom",
+  "version": "93.0.0",
+  "private": true,
+  "description": "عقارتكم V93 - Syrian governorates and localities",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "setup:notifications": "node scripts_setup_notifications.js",
+    "check": "node --check server/server.js && node --check server/ai-listing-studio.js && node --check server/ai-virtual-staging.js && node --check server/ai-property-video-studio.js && node --check server/property-ownership-verification.js && node --check server/ai-fraud-trust-center.js && node --check admin.js && node --check app.js && node --check server/ai-marketing-budget-optimizer.js && node --check server/ai-demand-forecast.js && node --check server/ai-investor-portfolio.js && node --check server/ai-property-matchmaker.js && node --check server/ai-marketplace-agent.js && node --check server/ai-deal-room.js && node --check server/ai-transaction-coordinator.js && node --check server/ai-neighborhood-guide.js && node --check server/ai-property-comparison.js && node --check server/ai-property-request.js && node --check server/property-request-tracking.js && node --check server/request-messaging-center.js && node --check transaction-coordinator.js && node --check property.js && node --check compare.js && node --check map-search.js && node --check request-property.js && node --check request-dashboard.js && node --check office-request-inbox.js && node --check messages.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "pg": "^8.16.3",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.6",
+    "web-push": "^3.6.7",
+    "pdfkit": "^0.15.2",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
