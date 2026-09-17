@@ -127,7 +127,43 @@ class HotelsViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun resumePending() { if (_pending.value != null) _page.value = HotelPage.Booking }
     fun history() { _page.value = HotelPage.History }
-    fun viewReceipt(receipt: HotelReceipt) { _receipt.value = receipt; _page.value = HotelPage.Receipt }
+    fun viewReceipt(receipt: HotelReceipt) {
+        if (_busy.value) return
+        _receipt.value = receipt; _page.value = HotelPage.Receipt
+        refreshReceipt()
+    }
+    private fun saveReceipt(updated: HotelReceipt) {
+        val rows = (listOf(updated) + _history.value).distinctBy { it.code }.take(50)
+        val json = JSONArray().apply { rows.forEach { put(JSONObject(it.json)) } }
+        if (!preferences.edit().putString("receipts", json.toString()).commit()) _message.value = "تم تحديث الحجز؛ تعذر حفظ الحالة على الجهاز"
+        _history.value = rows
+        if (_receipt.value?.code == updated.code) _receipt.value = updated
+    }
+    fun refreshReceipt() {
+        val current = _receipt.value ?: return
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try { saveReceipt(api.hotelBooking(current.code)) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _message.value = "تعذر تحديث الحالة: ${e.message ?: "تحقق من الاتصال"}. المعروض آخر حالة محفوظة." }
+            finally { _busy.value = false }
+        }
+    }
+    fun cancelReceipt() {
+        val current = _receipt.value ?: return
+        if (_busy.value || current.status !in listOf("pending", "confirmed")) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                saveReceipt(api.cancelHotelBooking(current))
+                _message.value = "تم إلغاء الحجز"
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                _message.value = if (e is ApiException) e.message else "لم يتأكد وصول نتيجة الإلغاء. حدّث حالة الحجز قبل إعادة المحاولة."
+            } finally { _busy.value = false }
+        }
+    }
     fun back() {
         if (_busy.value) { _message.value = "انتظر اكتمال إرسال الحجز"; return }
         when (_page.value) {

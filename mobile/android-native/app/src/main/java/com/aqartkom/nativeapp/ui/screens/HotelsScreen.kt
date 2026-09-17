@@ -81,7 +81,7 @@ fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?) {
                         is LoadState.Error -> ErrorPane(value.message, vm::retryQuote)
                         is LoadState.Ready -> BookingContent(value.value, pending, busy, user, vm::submit, vm::retryQuote)
                     }
-                    HotelPage.Receipt -> receipt?.let { ReceiptContent(it) }
+                    HotelPage.Receipt -> receipt?.let { ReceiptContent(it, busy, vm::refreshReceipt, vm::cancelReceipt) }
                     HotelPage.History -> LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         item { Text("الحجوزات التي أكملتها من هذا الجهاز. الحالة المعروضة هي آخر تأكيد محفوظ.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         if (history.isEmpty()) item { EmptyPane("لا توجد حجوزات محفوظة على هذا الجهاز") }
@@ -231,18 +231,33 @@ fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?) {
     }
 }
 
-@Composable private fun ReceiptContent(r: HotelReceipt) {
+@Composable private fun ReceiptContent(r: HotelReceipt, busy: Boolean, onRefresh: () -> Unit, onCancel: () -> Unit) {
+    var confirmCancel by rememberSaveable(r.code) { mutableStateOf(false) }
+    if (confirmCancel) AlertDialog(
+        onDismissRequest = { confirmCancel = false },
+        title = { Text("إلغاء الحجز؟") },
+        text = { Text("سيُلغى حجزك في ${r.hotel} إذا كانت مهلة الإلغاء تسمح بذلك. لا يمكن التراجع عن الإلغاء، ولا ينفّذ هذا الإجراء استردادًا ماليًا تلقائيًا.") },
+        confirmButton = { TextButton(onClick = { confirmCancel = false; onCancel() }, enabled = !busy) { Text("نعم، إلغاء الحجز") } },
+        dismissButton = { TextButton({ confirmCancel = false }) { Text("الاحتفاظ بالحجز") } }
+    )
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Icon(if (r.status == "confirmed") Icons.Default.CheckCircle else Icons.Default.Info, null, Modifier.size(58.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(if (r.status == "confirmed") "الحجز مؤكد" else "حالة الحجز: ${r.status}", style = MaterialTheme.typography.headlineSmall)
+        Text(if (r.status == "confirmed") "الحجز مؤكد" else when (r.status) { "cancelled" -> "الحجز ملغى"; "pending" -> "الحجز قيد الانتظار"; "completed" -> "الإقامة مكتملة"; "no_show" -> "عدم حضور"; else -> "حالة الحجز: ${r.status}" }, style = MaterialTheme.typography.headlineSmall)
         Text(r.hotel, style = MaterialTheme.typography.titleLarge); Text(r.room)
         Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(18.dp)) { Text(r.code, Modifier.padding(18.dp), style = MaterialTheme.typography.titleMedium) }
         OutlinedButton({ clipboard.setText(AnnotatedString(r.code)); copied = true }) { Icon(Icons.Default.ContentCopy, null); Spacer(Modifier.width(7.dp)); Text(if (copied) "تم نسخ الرقم" else "نسخ رقم الحجز") }
         Text("${r.checkIn} إلى ${r.checkOut}")
         Text(hotelMoney(r.total, r.currency), style = MaterialTheme.typography.headlineSmall)
         Text("الدفع عند الوصول • لم تُخصم دفعة إلكترونية", style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onRefresh, enabled = !busy) { Text(if (busy) "جارٍ تحديث الحجز…" else "تحديث حالة الحجز") }
+        if (r.status in listOf("pending", "confirmed")) {
+            val deadline = JSONObject(r.json).optString("cancellation_deadline").takeUnless { it.isBlank() || it == "null" }
+            if (deadline != null) Text("مهلة الإلغاء المجاني: " + deadline.take(10), style = MaterialTheme.typography.bodySmall)
+            OutlinedButton({ confirmCancel = true }, enabled = !busy, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("إلغاء الحجز") }
+            Text("يتحقق الفندق من مهلة الإلغاء عند إرسال الطلب.", style = MaterialTheme.typography.bodySmall)
+        }
         Text("احتفظ برقم الحجز عند التواصل مع الفندق. يمكنك العثور عليه في حجوزات هذا الجهاز.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

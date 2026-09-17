@@ -56,6 +56,13 @@ internal class HotelParser(origin: String) {
             q.optLong("hotel_id") > 0 && q.optLong("room_id") > 0 && q.hotelText("hotel_name").isNotBlank() && q.hotelText("room_name").isNotBlank()) { "تعذر التحقق من عرض السعر" }
         return HotelQuote(q.toString())
     }
+    fun cancelledReceipt(previous: HotelReceipt, response: JSONObject): HotelReceipt {
+        val updated = response.getJSONObject("data")
+        require(updated.optString("booking_code") == previous.code && updated.optString("status") == "cancelled") { "لم يصل تأكيد واضح للإلغاء؛ حدّث حالة الحجز" }
+        val merged = JSONObject(previous.json)
+        updated.keys().forEach { merged.put(it, updated.get(it)) }
+        return receipt(merged)
+    }
     fun receipt(j: JSONObject): HotelReceipt {
         val r = j.optJSONObject("data") ?: j
         val code = r.hotelText("booking_code")

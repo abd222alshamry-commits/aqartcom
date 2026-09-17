@@ -42,4 +42,19 @@ class HotelsRegressionTest {
         assertEquals("2026-10-01", receipt.checkIn)
         assertEquals(180.5, receipt.total, 0.0)
     }
+    @Test fun cancellationPreservesDisplayNamesAndSurvivesHistoryReload() {
+        val original = parser.receipt(JSONObject("""{"booking_code":"AQH-123","hotel_name":"Hotel","room_name":"Room","total":80,"currency":"USD","status":"confirmed"}"""))
+        val cancelled = parser.cancelledReceipt(original, JSONObject("""{"data":{"booking_code":"AQH-123","status":"cancelled"}}"""))
+        val restored = parser.receipt(JSONObject(cancelled.json))
+        assertEquals("cancelled", restored.status)
+        assertEquals("Hotel", restored.hotel)
+        assertEquals("Room", restored.room)
+        assertEquals(80.0, restored.total, 0.0)
+        assertEquals("confirmed", original.status)
+    }
+    @Test fun cancellationRejectsWrongBookingOrUnconfirmedOutcome() {
+        val original = parser.receipt(JSONObject("""{"booking_code":"AQH-123","total":80,"status":"confirmed"}"""))
+        assertThrows(IllegalArgumentException::class.java) { parser.cancelledReceipt(original, JSONObject("""{"data":{"booking_code":"AQH-OTHER","status":"cancelled"}}""")) }
+        assertThrows(IllegalArgumentException::class.java) { parser.cancelledReceipt(original, JSONObject("""{"data":{"booking_code":"AQH-123","status":"confirmed"}}""")) }
+    }
 }

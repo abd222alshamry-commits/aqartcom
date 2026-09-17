@@ -93,6 +93,17 @@ class AqartkomApi(context: Context) {
         }
     }
 
+    suspend fun hotelBooking(code: String): HotelReceipt = withContext(Dispatchers.IO) {
+        val url = "$origin/api/hotel-bookings".toHttpUrl().newBuilder().addPathSegment(code).build()
+        hotelParser.receipt(executeJson(Request.Builder().url(url).header("Cache-Control", "no-cache").get().build()))
+    }
+    suspend fun cancelHotelBooking(receipt: HotelReceipt): HotelReceipt = withContext(Dispatchers.IO) {
+        val url = "$origin/api/hotel-bookings".toHttpUrl().newBuilder().addPathSegment(receipt.code).addPathSegment("cancel").build()
+        val body = JSONObject().put("reason", "إلغاء من العميل عبر التطبيق").toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+        val response = executeJson(Request.Builder().url(url).post(body).build())
+        hotelParser.cancelledReceipt(receipt, response)
+    }
+
     suspend fun ownerDashboard(): OwnerDashboard = withContext(Dispatchers.IO) {
         val json = executeJson(Request.Builder().url("$origin/api/me/dashboard").get().build())
         OwnerDashboard(
