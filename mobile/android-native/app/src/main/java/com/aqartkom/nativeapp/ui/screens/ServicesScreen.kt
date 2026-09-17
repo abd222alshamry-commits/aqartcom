@@ -31,7 +31,7 @@ fun ServicesScreen(modifier: Modifier, user: User?, open: (String) -> Unit, hist
                 }
             }
         }
-        OutlinedButton(history, Modifier.fillMaxWidth()) { Icon(Icons.Default.History, null); Spacer(Modifier.width(8.dp)); Text("حجوزات النسخ السابقة على هذا الجهاز") }
+        OutlinedButton(history, Modifier.fillMaxWidth()) { Icon(Icons.Default.History, null); Spacer(Modifier.width(8.dp)); Text("الحجوزات المحفوظة في هذا التطبيق") }
         Text("سول يحتاج تنزيل النموذج مرة واحدة. الحجوزات والدفع والتعديلات تحتاج اتصالًا.", style = MaterialTheme.typography.bodySmall)
     }
 }
