@@ -1,7 +1,27 @@
 const $=id=>document.getElementById(id);let hotels=[],hotel=null,rooms=[],partnerUser=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-async function api(url,opt){const r=await fetch(url,opt);const j=await r.json();if(!r.ok)throw Error(j.error||'حدث خطأ');return j}
-async function load(){try{partnerUser=(await api('/api/auth/me')).user;hotels=(await api('/api/office/hotels')).data;renderHotels();if(hotels.length){$('workspace').classList.remove('hidden');$('hotelSelect').innerHTML=hotels.map(h=>`<option value="${h.id}">${esc(h.name)} — ${esc(h.city)}</option>`).join('');await loadHotel();}}catch(e){$('hotels').innerHTML=`<div class="card"><h3>تعذر فتح لوحة الفنادق</h3><p>${esc(e.message)}</p><a href="/admin.html">تسجيل دخول المدير</a> · <a href="/">حساب الشريك</a><p>استخدم حسابك في هذا المتصفح، ثم عد إلى لوحة الفنادق.</p></div>`}}
+async function api(url,opt){const r=await fetch(url,opt);const j=await r.json();if(!r.ok){const e=new Error(j.error||'حدث خطأ');e.status=r.status;throw e;}return j}
+function partnerLogin(message=''){
+ $('partnerAccess').innerHTML=`<h2>تسجيل الدخول لإدارة الفنادق</h2><p>سجّل الدخول بحساب المدير أو شريك الفندق في هذا المتصفح.</p><form id="partnerLoginForm"><label>البريد الإلكتروني<input name="email" type="email" autocomplete="username" required></label><label>كلمة المرور<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">دخول إلى إدارة الفنادق</button><p id="partnerLoginError" role="alert">${esc(message)}</p></form>`;
+ $('partnerLoginForm').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;try{await api('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(form)))});await load()}catch(e){$('partnerLoginError').textContent=e.message}finally{button.disabled=false}};
+}
+function canEditHotels(user){return user?.role==='agent'||(user?.role==='admin'&&(user.admin_permissions==null||user.admin_permissions.includes('hotels.write')))}
+async function load(){
+ $('addHotelButton').disabled=true;$('workspace').classList.add('hidden');$('hotels').innerHTML='';
+ try{
+  partnerUser=(await api('/api/auth/me')).user;
+  if(!partnerUser){partnerLogin();return}
+  if(!['admin','agent'].includes(partnerUser.role)){partnerLogin('الحساب الحالي '+partnerUser.email+' ليس مديرًا أو شريك فندق. استخدم حساب الإدارة.');return}
+  $('partnerAccess').innerHTML=`<h2>${partnerUser.role==='admin'?'حساب إدارة الفنادق':'حساب شريك الفندق'}</h2><p>${esc(partnerUser.name)} — ${esc(partnerUser.email)}</p><p id="hotelAccessMessage">جارٍ تحميل الفنادق…</p><div class="access-actions"><button id="switchPartnerAccount">تبديل الحساب</button><button id="retryPartnerLoad">تحديث</button>${partnerUser.role==='admin'&&partnerUser.admin_permissions==null?'<a href="/admin-team.html">إضافة مدير محدود</a><a href="/admin.html">لوحة الإدارة العامة</a>':''}</div>`;
+  $('switchPartnerAccount').onclick=()=>{partnerUser=null;hotels=[];hotel=null;rooms=[];$('addHotelButton').disabled=true;$('workspace').classList.add('hidden');$('hotels').innerHTML='';partnerLogin()};$('retryPartnerLoad').onclick=load;
+  hotels=(await api('/api/office/hotels')).data;
+  $('addHotelButton').disabled=!canEditHotels(partnerUser);
+  $('hotelAccessMessage').textContent=canEditHotels(partnerUser)?'يمكنك إضافة فندق جديد، ثم إضافة غرفه وصوره وفيديوهاته من الأزرار أدناه.':'هذا الحساب يملك صلاحية العرض فقط؛ إضافة وتعديل الفنادق تحتاج إلى صلاحية من المالك.';
+  renderHotels();
+  if(hotels.length){$('workspace').classList.remove('hidden');$('hotelSelect').innerHTML=hotels.map(h=>`<option value="${h.id}">${esc(h.name)} — ${esc(h.city)}</option>`).join('');await loadHotel();}
+ }catch(e){const message=$('hotelAccessMessage');if(message)message.textContent=e.message;else{$('partnerAccess').innerHTML=`<h2>تعذر تحميل الحساب</h2><p>${esc(e.message)}</p><button id="retryPartnerLoad">إعادة المحاولة</button>`;$('retryPartnerLoad').onclick=load;}}
+}
+
 function renderHotels(){$('hotels').innerHTML=hotels.map(h=>`<div class="card"><h3>${esc(h.name)}</h3><p>📍 ${esc(h.city)} ${esc(h.district||'')}</p><p>⭐ ${h.star_rating} · 🛏️ ${h.room_types} أنواع غرف · 📑 ${h.open_bookings} حجوزات مفتوحة</p><span class="status">${esc(h.status)}</span><button onclick="selectHotel(${h.id})">إدارة الفندق</button><button onclick="openMedia(${h.id})">صور وفيديو الفندق</button>${partnerUser?.role==='admin'?`<button onclick="publishHotel(${h.id},'${h.status==='active'?'inactive':'active'}')">${h.status==='active'?'إيقاف العرض':'نشر الفندق'}</button>`:''}</div>`).join('')||'<div class="card"><h3>لا يوجد فندق بعد</h3><p>أضف فندقك للبدء.</p></div>'}
 function selectHotel(id){$('hotelSelect').value=id;$('workspace').classList.remove('hidden');loadHotel()}
 async function loadHotel(){hotel=hotels.find(x=>x.id==$('hotelSelect').value);if(!hotel)return;rooms=(await api(`/api/office/hotels/${hotel.id}/rooms`)).data;$('stats').innerHTML=`🏨 ${esc(hotel.name)} · ${rooms.length} أنواع غرف`;showTab('rooms')}
