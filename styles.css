@@ -43,31 +43,15 @@ body:has(.modal.open){overflow:hidden}body:has(.modal.open) .assistant-fab,body:
 }
 
 /* Keep all four Syrian landmarks visible at every screen size. */
-.landmarks-hero{min-height:0;background:radial-gradient(ellipse at 8% 15%,#28475c 0,transparent 65%),#112842;padding-bottom:24px}
-.landmarks-hero .hero-inner{padding-top:24px}
-.hero-showcase{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);align-items:center;gap:36px;max-width:1120px;margin:auto}
-.landmarks-hero .intro{width:100%;padding:0 8px;text-align:right}
-.landmarks-hero .intro>span{font-size:14px;color:#f0cf83;border-color:#d5a128;padding-bottom:8px}
-.landmarks-hero .intro h1{font-size:64px;margin-top:20px}
-.landmarks-hero .intro h2{font-size:26px;margin:14px 0 8px}
-.landmarks-hero .intro p{font-size:16px;line-height:1.9;color:#d9e3eb;max-width:370px}
-.hero-landmarks{position:relative;width:100%;max-width:570px;margin:0;overflow:hidden;border-radius:18px;border:1px solid #ffffff26;box-shadow:0 14px 35px #06152540}
-.hero-landmarks img{display:block;width:100%;height:auto;aspect-ratio:3/2}
-.hero-landmarks figcaption{position:absolute;inset:auto 0 0;margin:0;padding:22px 12px 10px;text-align:center;font-size:11px;line-height:1.7;color:#fff;background:linear-gradient(transparent,#071c30cc)}
-.landmarks-hero .searchbox{margin-top:24px}
+.landmarks-hero{min-height:0;background:#112842;padding-bottom:24px}
+.hero-site-title{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.hero-landmarks{width:100%;margin:0}
+.hero-landmarks img{display:block;width:100%;height:auto;aspect-ratio:2/1}
+.landmarks-hero .hero-inner{padding-top:20px}
+.landmarks-hero .searchbox{margin-top:0}
 @media(max-width:800px){
   .landmarks-hero{padding-bottom:16px}
   .landmarks-hero .hero-inner{padding-top:12px}
-  .hero-showcase{display:flex;flex-direction:column;gap:12px}
-  .hero-landmarks{order:-1;max-width:570px;border-radius:12px}
-  .hero-landmarks figcaption{font-size:9px;padding:18px 6px 7px}
-  .landmarks-hero .intro{text-align:center;padding:0}
-  .landmarks-hero .intro>span{font-size:10px;padding-bottom:3px}
-  .landmarks-hero .intro h1{display:inline-block;font-size:32px;line-height:1.3;margin:7px 0 0}
-  .landmarks-hero .intro h2{display:inline-block;font-size:16px;margin:0 8px 0 0}
-  .landmarks-hero .intro>span{display:table;margin:0 auto}
-  .landmarks-hero .intro p{font-size:12px;line-height:1.7;max-width:none;margin:5px 0 0}
-  .landmarks-hero .searchbox{margin-top:14px}
 }
 
 /* Attachments are selected and previewed inside the new listing form. */
