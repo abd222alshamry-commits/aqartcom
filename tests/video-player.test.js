@@ -2,6 +2,8 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {resolveVideo, preview} = require('../video-player');
+const vm = require('node:vm');
+const fs = require('node:fs');
 
 test('uploaded and signed media links retain their path and query', () => {
   const local = resolveVideo('/uploads/home.mp4?signature=abc#t=12');
@@ -38,4 +40,20 @@ test('preview markup escapes advertiser-supplied titles and URLs', () => {
   assert.doesNotMatch(html, /<img src=x/);
   assert.match(html, /data-property-video="\{&quot;/);
   assert.match(html, /type="button"/);
+});
+test('unavailable video source links retain normal browser navigation', () => {
+  let click, prevented = false, stopped = false;
+  const sourceLink = {dataset:{videoExternal:'true'}};
+  const document = {
+    addEventListener(name, handler) { if (name === 'click') click = handler; },
+    createElement() { assert.fail('A source link must not reopen the unavailable viewer'); }
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../video-player'), 'utf8'), {window:{}, document, URL});
+  click({
+    target:{closest(selector) { return selector === '[data-video-external]' ? sourceLink : null; }},
+    preventDefault() { prevented = true; },
+    stopPropagation() { stopped = true; }
+  });
+  assert.equal(prevented, false);
+  assert.equal(stopped, false);
 });

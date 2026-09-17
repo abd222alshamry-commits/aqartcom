@@ -138,46 +138,34 @@
       tools.innerHTML = '<button type="button" data-seek="-10" aria-label="رجوع 10 ثوانٍ">↶ 10</button><label>السرعة <select aria-label="سرعة الفيديو"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button type="button" data-seek="10" aria-label="تقديم 10 ثوانٍ">10 ↷</button>';
       tools.querySelectorAll('[data-seek]').forEach(button => { button.onclick = () => { if (Number.isFinite(media.duration)) media.currentTime = Math.max(0, Math.min(media.duration, media.currentTime + Number(button.dataset.seek))); }; });
       tools.querySelector('select').onchange = event => { media.playbackRate = Number(event.target.value); };
-      // Request immediately inside the original click, before awaiting media/network work.
+      // Start sound while the original tap is active, before fullscreen consumes it.
+      play();
       requestFullscreen();
       if (!viewer.requestFullscreen && !viewer.webkitRequestFullscreen && media.webkitEnterFullscreen) {
         const nativeFullscreen = () => { if (!closed) { try { media.webkitEnterFullscreen(); } catch (_) {} } };
         media.addEventListener('loadedmetadata', nativeFullscreen, {once:true});
         media.addEventListener('webkitendfullscreen', () => close(), {once:true});
       }
-      play();
     } else if (source.type === 'facebook' && window.FacebookPropertyPlayer) {
       const status = document.createElement('p');
       status.className = 'video-viewer-status'; status.setAttribute('role', 'status');
       status.textContent = 'جاري تشغيل الفيديو…'; stage.append(status);
-      const retry = document.createElement('button');
-      retry.type = 'button'; retry.className = 'video-viewer-retry';
-      retry.textContent = '▶ تشغيل بالصوت'; retry.hidden = true; stage.append(retry);
-      let started = false;
-      function showRetry() {
-        if (closed || started) return;
-        status.textContent = 'اضغط للتشغيل إذا منعه المتصفح تلقائيًا.';
-        status.hidden = false; retry.hidden = false;
-      }
-      retry.onclick = () => { facebookController?.playWithSound(); };
       tools.textContent = 'تحكم بالصوت من رمز السماعة داخل الفيديو.';
       requestFullscreen();
       facebookController = window.FacebookPropertyPlayer.mount({
-        stage, url:source.url, autoStart:true,
-        onReady() { if (!closed) playbackTimer = setTimeout(showRetry, 8000); },
-        onPlaying() { started = true; clearTimeout(playbackTimer); status.hidden = true; retry.hidden = true; },
+        stage, url:source.url,
+        onReady() { if (!closed) { status.hidden = true; tools.textContent = 'اضغط ▶ داخل الفيديو للتشغيل بالصوت.'; } },
+        onPlaying() { status.hidden = true; tools.textContent = 'تحكم بالصوت من رمز السماعة داخل الفيديو.'; },
         onError() {
           if (closed) return;
           clearTimeout(playbackTimer); facebookController?.destroy();
-          status.hidden = true; retry.hidden = true;
-          media = document.createElement('iframe');
-          media.title = video.title || 'فيديو العقار';
-          media.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-          media.allowFullscreen = true; media.src = source.embed; stage.append(media);
-          fitFrame();
-          if (window.ResizeObserver) { frameObserver = new ResizeObserver(fitFrame); frameObserver.observe(stage); }
-          window.addEventListener('resize', fitFrame);
-          tools.textContent = 'تعذر التشغيل التلقائي. اضغط ▶ داخل الفيديو للتشغيل بالصوت.';
+          status.hidden = true;
+          const message = document.createElement('div'); message.className = 'video-viewer-message';
+          const explanation = document.createElement('p'); explanation.textContent = 'هذا الفيديو غير متاح للتشغيل داخل الموقع.';
+          const link = document.createElement('a'); link.className = 'video-viewer-source video-source-action';
+          link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'شاهد على فيسبوك ↗';
+          message.append(explanation, link); stage.append(message);
+          tools.textContent = 'يمكنك مشاهدة الفيديو من مصدره الأصلي.';
         }
       });
     } else if (source.embed) {
@@ -205,6 +193,7 @@
   }
   window.PropertyVideo = {open, preview, resolveVideo};
   document.addEventListener('click', function (event) {
+    if (event.target.closest('[data-video-external]')) return;
     const trigger = event.target.closest('[data-property-video], a.marei-preview');
     if (!trigger || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     let video;

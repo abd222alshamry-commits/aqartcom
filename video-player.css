@@ -33,6 +33,9 @@ html body .play-main{border:0;padding:0;background:#d3a331!important;color:#fff!
 /* Inline Facebook controls receive the original user gesture before expanding. */
 .facebook-preview-fallback{display:block;position:absolute;inset:0;width:100%;height:100%;border:0;padding:0;background:#17212c;color:#fff;cursor:pointer}
 .facebook-preview-fallback[hidden]{display:none!important}
+.facebook-fallback-label{position:absolute;inset:auto 8px 8px;display:block;width:fit-content;max-width:calc(100% - 16px);margin:auto;padding:5px 10px;border-radius:6px;background:#101827ed;color:#fff;font:600 12px/1.6 Cairo,Arial,sans-serif;text-align:center}
+.facebook-preview-fallback .marei-duration{top:8px;bottom:auto}
+.property-video-viewer a.video-source-action{display:inline-block;padding:12px 20px;border:1px solid #d3a331;border-radius:8px;font-size:14px!important}
 .video-inline-preview{position:absolute;inset:0;width:100%;height:100%;background:#000;opacity:0;pointer-events:none}
 .video-inline-preview.video-inline-ready{opacity:1;pointer-events:auto}
 .video-inline-preview>.video-viewer-header,.video-inline-preview>.video-viewer-footer{display:none}

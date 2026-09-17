@@ -73,9 +73,20 @@
     if (source?.type !== 'facebook') return;
     const box = document.createElement('div');
     box.className = trigger.classList.contains('marei-preview') ? 'marei-preview' : 'property-video-launch';
-    trigger.replaceWith(box); box.append(trigger);
-    trigger.className = 'facebook-preview-fallback';
-    trigger.dataset.propertyVideo = JSON.stringify(video);
+    // Until Facebook confirms that it can play, keep a real source link.
+    // Reopening the same failed embed traps visitors in a non-working viewer.
+    const fallback = document.createElement('a');
+    fallback.className = 'facebook-preview-fallback';
+    fallback.href = source.url; fallback.target = '_blank'; fallback.rel = 'noopener noreferrer';
+    fallback.dataset.videoExternal = 'true';
+    fallback.setAttribute('aria-label', 'شاهد على فيسبوك: ' + (video.title || 'فيديو العقار'));
+    while (trigger.firstChild) fallback.append(trigger.firstChild);
+    fallback.querySelectorAll('.marei-play, .video-launch-icon').forEach(icon => { icon.textContent = '↗'; });
+    fallback.querySelector('.video-launch-caption')?.remove();
+    const fallbackLabel = document.createElement('span');
+    fallbackLabel.className = 'facebook-fallback-label'; fallbackLabel.textContent = 'شاهد على فيسبوك ↗';
+    fallback.append(fallbackLabel);
+    trigger.replaceWith(box); box.append(fallback);
     const viewer = document.createElement('div');
     viewer.className = 'video-inline-preview'; viewer.dir = 'rtl';
     const titleId = 'facebook-inline-title-' + (++serial);
@@ -95,9 +106,13 @@
     const entry = {box, viewer, closeButton, controller:null, close:() => {}};
     entries.set(trigger, entry);
     entry.controller = window.FacebookPropertyPlayer.mount({stage, url:source.url,
-      onReady() { if (box.isConnected) { trigger.hidden = true; viewer.classList.add('video-inline-ready'); } },
+      onReady() { if (box.isConnected) { fallback.hidden = true; viewer.classList.add('video-inline-ready'); } },
       onPlaying() { if (box.isConnected) expand(entry); },
-      onError() { entry.close(); entry.controller?.destroy(); viewer.remove(); trigger.hidden = false; }
+      onError() {
+        entry.close(); entry.controller?.destroy(); viewer.remove(); fallback.hidden = false;
+        fallbackLabel.textContent = 'التشغيل عبر فيسبوك ↗';
+        fallback.title = 'تعذر تشغيل هذا الفيديو داخل الموقع. افتحه على فيسبوك.';
+      }
     });
   }
   const observer = window.IntersectionObserver ? new IntersectionObserver(items => {
