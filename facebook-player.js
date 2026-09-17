@@ -27,7 +27,7 @@
     const subscriptions = [];
     const host = document.createElement('div');
     host.className = 'facebook-video-host';
-    host.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);transform-origin:center;';
+    host.style.cssText = 'position:absolute;left:50%;top:50%;width:500px;height:889px;transform:translate(-50%,-50%);transform-origin:center;';
     const widget = document.createElement('div');
     widget.id = 'aqartcom-facebook-' + (++sequence);
     widget.className = 'fb-video';
