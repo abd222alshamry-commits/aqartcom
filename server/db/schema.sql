@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS property_videos (
 CREATE INDEX IF NOT EXISTS idx_property_videos_property ON property_videos(property_id, created_at DESC);
 ALTER TABLE property_videos ADD COLUMN IF NOT EXISTS source_type VARCHAR(30) NOT NULL DEFAULT 'upload';
 ALTER TABLE property_videos ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE property_videos ADD COLUMN IF NOT EXISTS poster_url TEXT;
 CREATE INDEX IF NOT EXISTS idx_property_videos_primary ON property_videos(property_id, is_primary DESC, created_at DESC);
 
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
@@ -1218,3 +1219,8 @@ CREATE TABLE IF NOT EXISTS hotel_channel_reservation_runs (
  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
  finished_at TIMESTAMPTZ
 );
+
+-- Android booking retry protection; existing web bookings keep NULL keys.
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS idempotency_key UUID;
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS request_hash VARCHAR(64);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hotel_booking_idempotency ON hotel_bookings(idempotency_key) WHERE idempotency_key IS NOT NULL;

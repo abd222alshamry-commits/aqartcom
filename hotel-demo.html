@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>فنادق الاختبار | عقارتكم</title>
+  <link rel="stylesheet" href="/hotels.css">
+  <style>
+    main{max-width:920px;margin:auto;padding:24px 18px}.notice{background:#fff3d6;border:1px solid #e8c36c;border-radius:12px;padding:16px;line-height:1.9}h1{font-size:28px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.actions button{border:0;border-radius:9px;padding:13px 18px;background:#0f6b55;color:white;font:inherit;cursor:pointer}.actions button.secondary{background:#e9edf0;color:#24333c}button:disabled{opacity:.5;cursor:wait}table{width:100%;border-collapse:collapse;background:white}td,th{text-align:right;padding:12px;border-bottom:1px solid #e7eaed}.table-wrap{overflow:auto}#message{line-height:1.8}a{color:#0f6b55}
+  </style>
+  <script src="/hotel-demo.js" defer></script>
+</head>
+<body>
+  <header><a class="brand" href="/">عقارتكم</a><a class="back" href="/hotels.html">تصفح الفنادق</a></header>
+  <main>
+    <h1>إعلانات فنادق تجريبية</h1>
+    <p class="notice">ستة فنادق افتراضية، ولكل فندق ثلاث فئات غرف. الأسماء والأسعار والصور للاختبار فقط، ولا تمثل عروض إقامة حقيقية. لا تُنشئ هذه الخطوة حجوزات أو دفعات.</p>
+    <p>يضيف زر الإضافة الفنادق إلى الموقع والتطبيق. تكرار الضغط لا يكرر البيانات. زر الإخفاء يوقف عرضها مع الاحتفاظ بسجلاتها.</p>
+    <div class="actions"><button id="create" disabled>إضافة 6 فنادق تجريبية</button><button id="hide" class="secondary" disabled>إخفاء الفنادق التجريبية</button></div>
+    <p id="message" role="status" aria-live="polite">جارٍ التحقق من حساب المدير…</p>
+    <p id="login" hidden><a href="/login.html">تسجيل الدخول بحساب المدير</a></p>
+    <div class="table-wrap"><table><thead><tr><th>المدينة</th><th>أسعار الليلة التجريبية</th><th>الحالة</th></tr></thead><tbody id="catalog"></tbody></table></div>
+    <p>الصور المستخدمة صور توضيحية عامة من المشروع، وليست صور غرف الفنادق المسماة. لا توجد نجوم أو تقييمات ضيوف مختلقة.</p>
+  </main>
+</body>
+</html>

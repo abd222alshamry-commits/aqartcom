@@ -1,4 +1,4 @@
-plugins { id 'com.android.application' }
+apply plugin: 'com.android.application'
 def siteUrl = providers.gradleProperty('AQARTKOM_URL').getOrElse('')
 if (!siteUrl.matches('https://[a-zA-Z0-9.-]+(?::[0-9]+)?/?') || siteUrl.contains('.invalid')) {
     throw new GradleException('Set AQARTKOM_URL to the deployed HTTPS origin in your user Gradle properties.')
@@ -7,13 +7,14 @@ android {
     namespace 'com.aqartkom.app'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.aqartkom.app'
+        applicationId 'com.aqartkom.mobileapp'
         minSdk 26
         targetSdk 35
-        versionCode 92
-        versionName '0.92.0'
+        versionCode 101
+        versionName '1.0.1'
         buildConfigField 'String', 'SITE_URL', '"' + siteUrl + '"'
     }
     buildFeatures { buildConfig true }
+    lint { checkReleaseBuilds false }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }

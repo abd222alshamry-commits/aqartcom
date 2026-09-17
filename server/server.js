@@ -39,6 +39,20 @@ app.use('/uploads', express.static(uploadDir));
 const storage = multer.diskStorage({ destination: (_req,_file,cb)=>cb(null, uploadDir), filename: (_req,file,cb)=>{ const ext=path.extname(file.originalname).toLowerCase(); cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`); } });
 const imageUpload = multer({ storage, limits: { files: 12, fileSize: 8*1024*1024 }, fileFilter: (_req,file,cb)=>cb(null, /^image\/(jpeg|png|webp|jpg)$/.test(file.mimetype)) });
 const videoUpload = multer({ storage, limits: { files: 3, fileSize: 100*1024*1024 }, fileFilter: (_req,file,cb)=>cb(null, /^video\/(mp4|webm|quicktime)$/.test(file.mimetype)) });
+function uploadErrorMessage(error, kind) {
+  if (error?.code === 'LIMIT_FILE_SIZE') return kind === 'image' ? 'حجم الصورة يتجاوز 8 ميغابايت.' : 'حجم الفيديو يتجاوز 100 ميغابايت.';
+  if (error instanceof multer.MulterError) return `تعذر استقبال ${kind === 'image' ? 'الصور' : 'الفيديوهات'}: ${error.message}`;
+  return kind === 'image' ? 'اختر صور JPEG أو PNG أو WebP صالحة.' : 'اختر فيديو MP4 أو MOV أو WebM صالحًا.';
+}
+const receiveImages = (req,res,next) => imageUpload.array('images',12)(req,res,error => error ? res.status(400).json({error:uploadErrorMessage(error,'image')}) : next());
+const receiveVideos = (req,res,next) => videoUpload.array('videos',3)(req,res,error => error ? res.status(400).json({error:uploadErrorMessage(error,'video')}) : next());
+function createVideoPoster(filePath) {
+  const parsed=path.parse(filePath),posterPath=path.join(parsed.dir,parsed.name+'.jpg');
+  return new Promise(resolve=>execFile('ffmpeg',['-nostdin','-v','error','-ss','0.5','-i',filePath,'-frames:v','1','-vf','scale=640:640:force_original_aspect_ratio=decrease','-y',posterPath],{timeout:20000},error=>{
+    if(error){try{fs.unlinkSync(posterPath)}catch{};return resolve(null);}
+    resolve('/uploads/'+path.basename(posterPath));
+  }));
+}
 app.use(require('./public-files')(path.join(__dirname, '..')));
 
 function normalizeEmail(email) { return String(email || '').trim().toLowerCase(); }
@@ -288,6 +302,9 @@ app.post('/api/hotels/book', async(req,res)=>{try{
   const userId=(await getCurrentUser(req))?.id||null; const r=await client.query(`INSERT INTO hotel_bookings(booking_code,hotel_id,room_id,user_id,guest_name,guest_email,guest_phone,check_in,check_out,adults,children,rooms_count,nights,unit_price,subtotal,total,currency,payment_method,payment_status,status,cancellation_deadline,special_requests,commission_amount,net_amount) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'confirmed',$9::date-INTERVAL '1 day',$20,$21,$22) RETURNING *`,[code,h.id,av.room.id,userId,b.guest_name,b.guest_email||null,b.guest_phone,b.check_in,b.check_out,adults,children,roomsCount,n,rate.price,subtotal,total,rate.currency,b.payment_method||'pay_at_hotel',b.payment_method==='online'?'pending':'pending',b.special_requests||null,commission,net]);
   await client.query(`INSERT INTO hotel_booking_events(booking_id,event_type,note,actor_user_id) VALUES($1,'created','تم إنشاء الحجز', $2)`,[r.rows[0].id,userId]); const inv='AQHINV-'+Date.now().toString(36).toUpperCase(); await client.query(`INSERT INTO hotel_invoices(booking_id,invoice_number,gross_amount,commission_amount,net_amount,currency) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,[r.rows[0].id,inv,total,commission,net,rate.currency]); await client.query('COMMIT'); client.release(); res.status(201).json({data:r.rows[0],invoice_number:inv}); syncHotel(pool,h.id).catch(e=>console.error('OTA post-booking sync',e.message));
 }catch(e){try{await client.query('ROLLBACK')}catch(_){} client.release(); console.error(e);res.status(500).json({error:'تعذر إنشاء الحجز'});} }catch(e){console.error(e);res.status(500).json({error:'تعذر إنشاء الحجز'});}});
+
+require('./mobile-hotels').register(app, { pool, getCurrentUser, syncHotel });
+require('./demo-hotels').register(app, { pool, requireAdmin });
 
 app.get('/api/office/hotels',requireOfficeMember,async(req,res)=>{try{const hs=(await pool.query(`SELECT h.*,(SELECT COUNT(*) FROM hotel_rooms r WHERE r.hotel_id=h.id)::int room_types,(SELECT COUNT(*) FROM hotel_bookings b WHERE b.hotel_id=h.id AND b.status IN ('pending','confirmed'))::int open_bookings FROM hotels h WHERE h.office_id=$1 OR h.owner_id=$2 ORDER BY h.created_at DESC`,[req.office.id,req.office.owner_id])).rows;res.json({data:hs});}catch(e){res.status(500).json({error:'تعذر تحميل فنادق المكتب'});}});
 app.post('/api/office/hotels',requireOfficeMember,async(req,res)=>{try{const b=req.body||{};if(!b.name||!b.city)return res.status(400).json({error:'اسم الفندق والمدينة مطلوبان'});let slug=String(b.slug||b.name).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,220)||('hotel-'+Date.now());let base=slug,n=2;while((await pool.query('SELECT 1 FROM hotels WHERE slug=$1',[slug])).rows[0])slug=base+'-'+n++;const r=await pool.query(`INSERT INTO hotels(office_id,owner_id,name,slug,city,district,address,description,star_rating,latitude,longitude,amenities,images,check_in_time,check_out_time,cancellation_policy,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending') RETURNING *`,[req.office.id,req.office.owner_id,b.name,slug,b.city,b.district||null,b.address||null,b.description||null,Number(b.star_rating)||0,b.latitude||null,b.longitude||null,JSON.stringify(b.amenities||[]),JSON.stringify(b.images||[]),b.check_in_time||'14:00',b.check_out_time||'12:00',b.cancellation_policy||null]);res.status(201).json({data:r.rows[0]});}catch(e){console.error(e);res.status(500).json({error:'تعذر إنشاء الفندق'});}});
@@ -943,7 +960,7 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/me/dashboard', requireAuth, async (req,res)=>{
   try {
     const [props, stats, inquiries] = await Promise.all([
-      pool.query(`SELECT p.*, COALESCE((SELECT json_agg(json_build_object('id',pi.id,'url',pi.url,'sort_order',pi.sort_order) ORDER BY pi.sort_order,pi.id) FROM property_images pi WHERE pi.property_id=p.id),'[]') AS images, COALESCE((SELECT json_agg(json_build_object('id',pv.id,'url',pv.url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) ORDER BY pv.created_at DESC) FROM property_videos pv WHERE pv.property_id=p.id),'[]') AS videos, (SELECT COUNT(*) FROM inquiries i WHERE i.property_id=p.id AND i.status='new') AS new_inquiries FROM properties p WHERE p.owner_id=$1 ORDER BY p.created_at DESC`,[req.user.id]),
+      pool.query(`SELECT p.*, COALESCE((SELECT json_agg(json_build_object('id',pi.id,'url',pi.url,'sort_order',pi.sort_order) ORDER BY pi.sort_order,pi.id) FROM property_images pi WHERE pi.property_id=p.id),'[]') AS images, COALESCE((SELECT json_agg(json_build_object('id',pv.id,'url',pv.url,'poster_url',pv.poster_url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) ORDER BY pv.created_at DESC) FROM property_videos pv WHERE pv.property_id=p.id),'[]') AS videos, (SELECT COUNT(*) FROM inquiries i WHERE i.property_id=p.id AND i.status='new') AS new_inquiries FROM properties p WHERE p.owner_id=$1 ORDER BY p.created_at DESC`,[req.user.id]),
       pool.query(`SELECT COUNT(*) AS properties, COALESCE(SUM(p.views_count),0) AS views, (SELECT COUNT(*) FROM inquiries i JOIN properties pp ON pp.id=i.property_id WHERE pp.owner_id=$1) AS inquiries FROM properties p WHERE p.owner_id=$1`,[req.user.id]),
       pool.query(`SELECT i.*, p.title FROM inquiries i JOIN properties p ON p.id=i.property_id WHERE p.owner_id=$1 ORDER BY i.created_at DESC LIMIT 50`,[req.user.id])
     ]);
@@ -978,11 +995,11 @@ app.delete('/api/me/properties/:id', requireAuth, async (req,res)=>{
   try { const id=Number(req.params.id); const r=await pool.query('DELETE FROM properties WHERE id=$1 AND owner_id=$2 RETURNING id',[id,req.user.id]); if(!r.rows[0]) return res.status(404).json({error:'العقار غير موجود أو لا تملك صلاحية حذفه'}); res.json({ok:true}); } catch(e){res.status(500).json({error:'تعذر حذف العقار'});} 
 });
 
-app.post('/api/me/properties/:id/images', requireAuth, imageUpload.array('images',12), async (req,res)=>{
+app.post('/api/me/properties/:id/images', requireAuth, receiveImages, async (req,res)=>{
   try { const id=Number(req.params.id); const own=await pool.query('SELECT id FROM properties WHERE id=$1 AND owner_id=$2',[id,req.user.id]); if(!own.rows[0]) return res.status(404).json({error:'العقار غير موجود أو لا تملك صلاحية تعديله'}); const count=await pool.query('SELECT COALESCE(MAX(sort_order),-1) AS max FROM property_images WHERE property_id=$1',[id]); let order=Number(count.rows[0].max)+1; const rows=[]; for(const f of req.files||[]){const url=`/uploads/${f.filename}`; const r=await pool.query('INSERT INTO property_images(property_id,url,sort_order) VALUES($1,$2,$3) RETURNING *',[id,url,order++]); rows.push(r.rows[0]);} res.status(201).json({data:rows}); } catch(e){console.error(e);res.status(500).json({error:'تعذر رفع الصور'});} 
 });
 
-app.post('/api/me/properties/:id/videos', requireAuth, videoUpload.array('videos',3), async (req,res)=>{
+app.post('/api/me/properties/:id/videos', requireAuth, receiveVideos, async (req,res)=>{
   try {
     const id=Number(req.params.id);
     const own=await pool.query('SELECT id FROM properties WHERE id=$1 AND owner_id=$2',[id,req.user.id]);
@@ -990,7 +1007,8 @@ app.post('/api/me/properties/:id/videos', requireAuth, videoUpload.array('videos
     const rows=[];
     for(const f of req.files||[]){
       const url=`/uploads/${f.filename}`;
-      const count=await pool.query('SELECT COUNT(*)::int AS n FROM property_videos WHERE property_id=$1',[id]); const isPrimary=count.rows[0].n===0; const r=await pool.query('INSERT INTO property_videos(property_id,url,title,is_primary) VALUES($1,$2,$3,$4) RETURNING *',[id,url,f.originalname||'فيديو العقار',isPrimary]);
+      const posterUrl=await createVideoPoster(f.path);
+      const count=await pool.query('SELECT COUNT(*)::int AS n FROM property_videos WHERE property_id=$1',[id]); const isPrimary=count.rows[0].n===0; const r=await pool.query('INSERT INTO property_videos(property_id,url,poster_url,title,is_primary) VALUES($1,$2,$3,$4,$5) RETURNING *',[id,url,posterUrl,f.originalname||'فيديو العقار',isPrimary]);
       rows.push(r.rows[0]);
     }
     res.status(201).json({data:rows});
@@ -1113,7 +1131,7 @@ app.get('/api/properties', async (req, res) => {
         ${geoSelect},
         CASE WHEN ad.id IS NULL THEN FALSE ELSE TRUE END AS sponsored,
         CASE WHEN ad.id IS NULL THEN NULL ELSE json_build_object('id',ad.id,'placement',ad.placement,'priority',ad.priority,'label',COALESCE(ad.title,'إعلان ممول'),'office_id',ad.office_id,'verified',COALESCE(o.verified,FALSE)) END AS ad,
-        COALESCE((SELECT json_build_object('id',pv.id,'url',pv.url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) FROM property_videos pv WHERE pv.property_id=p.id ORDER BY pv.is_primary DESC,pv.created_at DESC LIMIT 1), NULL) AS primary_video
+        COALESCE((SELECT json_build_object('id',pv.id,'url',pv.url,'poster_url',pv.poster_url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) FROM property_videos pv WHERE pv.property_id=p.id ORDER BY pv.is_primary DESC,pv.created_at DESC LIMIT 1), NULL) AS primary_video
       FROM properties p
       LEFT JOIN currency_rates rf ON rf.base_currency=$${fxBaseParam} AND rf.quote_currency=p.currency
       LEFT JOIN currency_rates rt ON rt.base_currency=$${fxBaseParam} AND rt.quote_currency=$${displayCurrencyParam}
@@ -1203,7 +1221,7 @@ app.post('/api/office/ads/:id/publish', requireOfficeMember, async(req,res)=>{
 });
 
 app.get('/api/properties/:id', async (req, res) => {
-  try { const result=await pool.query(`UPDATE properties SET views_count=views_count+1 WHERE id=$1 AND status='active' AND is_demo=FALSE RETURNING *`,[req.params.id]); if(!result.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const owner=await pool.query('SELECT id,name,phone,email,role,created_at FROM users WHERE id=$1',[result.rows[0].owner_id]); const imgs=await pool.query('SELECT id,url,sort_order FROM property_images WHERE property_id=$1 ORDER BY sort_order,id',[req.params.id]); const vids=await pool.query('SELECT id,url,title,source_type,is_primary FROM property_videos WHERE property_id=$1 ORDER BY is_primary DESC,created_at DESC',[req.params.id]); const ad=await pool.query(`SELECT id,placement,priority,title FROM office_ads WHERE property_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW()) ORDER BY priority DESC,budget DESC,created_at DESC LIMIT 1`,[req.params.id]); result.rows[0].images=imgs.rows; result.rows[0].videos=vids.rows; result.rows[0].owner=owner.rows[0]||null; result.rows[0].ad=ad.rows[0]||null; res.json({data:require('./listing-location').withFallbackLocation(result.rows[0])}); }
+  try { const result=await pool.query(`UPDATE properties SET views_count=views_count+1 WHERE id=$1 AND status='active' AND is_demo=FALSE RETURNING *`,[req.params.id]); if(!result.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const owner=await pool.query('SELECT id,name,phone,email,role,created_at FROM users WHERE id=$1',[result.rows[0].owner_id]); const imgs=await pool.query('SELECT id,url,sort_order FROM property_images WHERE property_id=$1 ORDER BY sort_order,id',[req.params.id]); const vids=await pool.query('SELECT id,url,poster_url,title,source_type,is_primary FROM property_videos WHERE property_id=$1 ORDER BY is_primary DESC,created_at DESC',[req.params.id]); const ad=await pool.query(`SELECT id,placement,priority,title FROM office_ads WHERE property_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW()) ORDER BY priority DESC,budget DESC,created_at DESC LIMIT 1`,[req.params.id]); result.rows[0].images=imgs.rows; result.rows[0].videos=vids.rows; result.rows[0].owner=owner.rows[0]||null; result.rows[0].ad=ad.rows[0]||null; res.json({data:require('./listing-location').withFallbackLocation(result.rows[0])}); }
   catch(error){res.status(500).json({error:'تعذر تحميل العقار'});}
 });
 
@@ -1706,7 +1724,7 @@ async function buildRecommendationProfile(userId){
 function prefWeight(arr,val){const x=(arr||[]).find(i=>String(i.value)===String(val||''));return x?Number(x.weight||0):0}
 async function recommendationsFor(userId,limit=12){
   const pr=await buildRecommendationProfile(userId), p=pr.profile;
-  const rows=(await pool.query(`SELECT p.*,COALESCE(ai.pricing_label,'') pricing_label,COALESCE(ai.recommendation_score,50) market_score,(SELECT pi.url FROM property_images pi WHERE pi.property_id=p.id ORDER BY pi.sort_order,pi.id LIMIT 1) image_url,(SELECT json_build_object('id',pv.id,'url',pv.url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) FROM property_videos pv WHERE pv.property_id=p.id ORDER BY pv.is_primary DESC,pv.created_at DESC LIMIT 1) primary_video FROM properties p LEFT JOIN property_ai_scores ai ON ai.property_id=p.id WHERE p.status='active' AND p.owner_id IS DISTINCT FROM $1 AND NOT EXISTS(SELECT 1 FROM user_property_events e WHERE e.user_id=$1 AND e.property_id=p.id AND e.event_type='dismiss' AND e.created_at>NOW()-INTERVAL '90 days') ORDER BY p.featured DESC,p.created_at DESC LIMIT 800`,[userId])).rows;
+  const rows=(await pool.query(`SELECT p.*,COALESCE(ai.pricing_label,'') pricing_label,COALESCE(ai.recommendation_score,50) market_score,(SELECT pi.url FROM property_images pi WHERE pi.property_id=p.id ORDER BY pi.sort_order,pi.id LIMIT 1) image_url,(SELECT json_build_object('id',pv.id,'url',pv.url,'poster_url',pv.poster_url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) FROM property_videos pv WHERE pv.property_id=p.id ORDER BY pv.is_primary DESC,pv.created_at DESC LIMIT 1) primary_video FROM properties p LEFT JOIN property_ai_scores ai ON ai.property_id=p.id WHERE p.status='active' AND p.owner_id IS DISTINCT FROM $1 AND NOT EXISTS(SELECT 1 FROM user_property_events e WHERE e.user_id=$1 AND e.property_id=p.id AND e.event_type='dismiss' AND e.created_at>NOW()-INTERVAL '90 days') ORDER BY p.featured DESC,p.created_at DESC LIMIT 800`,[userId])).rows;
   const scored=rows.map(x=>{let score=20,reasons=[];const cw=prefWeight(p.cities,x.city),dw=prefWeight(p.districts,x.district),tw=prefWeight(p.types,x.type),mw=prefWeight(p.modes,x.mode);if(cw>0){score+=Math.min(25,cw*2);reasons.push('مدينة تهتم بها')}if(dw>0){score+=Math.min(20,dw*2);reasons.push('حي قريب من اهتماماتك')}if(tw>0){score+=Math.min(20,tw*2);reasons.push('نوع عقار تفضله')}if(mw>0){score+=Math.min(15,mw*2);reasons.push(x.mode==='بيع'?'يناسب اهتمامك بالشراء':'يناسب اهتمامك بالإيجار')}if(p.price_min&&p.price_max&&Number(x.price)>=p.price_min*.75&&Number(x.price)<=p.price_max*1.25){score+=10;reasons.push('ضمن نطاق سعري مناسب')}if(x.pricing_label==='under_market'){score+=8;reasons.push('فرصة سعرية حسب تحليل السوق')}score+=Math.min(8,Number(x.market_score||50)/12.5);return {...x,personal_score:Math.min(100,Math.round(score)),recommendation_reason:reasons.slice(0,3).join(' • ')||'عقار نشط قد يناسبك'}}).sort((a,b)=>b.personal_score-a.personal_score||new Date(b.created_at)-new Date(a.created_at)).slice(0,limit);
   for(const x of scored)await pool.query(`INSERT INTO property_recommendation_impressions(user_id,property_id,score,reason,shown_at) VALUES($1,$2,$3,$4,NOW()) ON CONFLICT(user_id,property_id) DO UPDATE SET score=EXCLUDED.score,reason=EXCLUDED.reason,shown_at=NOW()`,[userId,x.id,x.personal_score,x.recommendation_reason]);
   return {data:scored,profile:pr,cold_start:pr.signal_count<3};
@@ -1815,6 +1833,11 @@ await require('./request-messaging-center')(app,{pool,getCurrentUser});
 require('./chatgpt-manager')(app,{pool,getCurrentUser,requireAdmin});
 app.use((_req,res)=>res.status(404).json({error:'المسار غير موجود'}));
 await ensureAdminFromEnv();
+try {
+  const hotelDemoImport=await require('./demo-hotels').seedRequestedBatch(pool,normalizeEmail(process.env.ADMIN_EMAIL));
+  if(!hotelDemoImport.skipped)console.log('Requested demo hotels imported:',hotelDemoImport.created);
+  else if(hotelDemoImport.reason)console.warn('Requested demo hotels pending:',hotelDemoImport.reason);
+} catch(error) { console.error('Requested demo hotel import failed:',error.message); }
 const demoImport=await require('./demo-listings').seedDemoListings(pool);
 if(!demoImport.skipped)console.log('Demo listings imported:',demoImport.created);
 const mareiImport=await require('./marei-listings').seedMareiListings(pool);

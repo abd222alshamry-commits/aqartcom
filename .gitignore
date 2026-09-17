@@ -6,6 +6,15 @@ uploads/
 private_uploads/
 backups/
 *.zip
+*.apk
+
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android-native/.gradle/
+mobile/android-native/.kotlin/
+mobile/android-native/build/
+mobile/android-native/app/build/
 
 qa/results.json
 qa/*.log
