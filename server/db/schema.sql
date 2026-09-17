@@ -1277,3 +1277,19 @@ DO $$ BEGIN
    USING (cancellation_deadline::timestamp AT TIME ZONE 'UTC');
  END IF;
 END $$;
+
+-- Unified offer moderation and manually entered office offers.
+ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS office_id BIGINT REFERENCES offices(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_market_listings_office ON market_listings(office_id);
+CREATE TABLE IF NOT EXISTS offer_review_events (
+  id BIGSERIAL PRIMARY KEY,
+  kind VARCHAR(20) NOT NULL CHECK (kind IN ('property','hotel','market')),
+  offer_id BIGINT NOT NULL,
+  action VARCHAR(20) NOT NULL CHECK (action IN ('create','approve','reject','pending')),
+  reason TEXT NOT NULL DEFAULT '',
+  actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  from_status VARCHAR(30),
+  to_status VARCHAR(30) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_offer_review_history ON offer_review_events(kind,offer_id,id DESC);

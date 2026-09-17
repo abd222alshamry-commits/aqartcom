@@ -4,7 +4,8 @@ const data = require('./office-listings-data.json');
 const {withApproximateLocation}=require('./listing-location');
 const enabledBatch = '2026-09-16-marei-public-references';
 const regionalBatch = 'regional-astra-v1';
-const publishedBatches = Object.freeze([data.snapshot, regionalBatch]);
+const manualBatch = 'moderated-office-v1';
+const publishedBatches = Object.freeze([data.snapshot, regionalBatch, manualBatch]);
 
 // Relative Facebook dates are anchored to the review, never to today's date.
 // This value is only an ordering key; it is not presented as an exact post time.
@@ -63,7 +64,7 @@ async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BAT
 }
 
 const publicColumns = `m.id,m.platform,m.title,m.description,m.external_url,m.advertiser_name,
-  m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.media,
+  m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.rooms,m.media,
   m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
   m.raw_data->>'source_published_at' AS source_published_at,m.raw_data->>'published_label' AS published_label,
   m.raw_data->>'observed_at' AS observed_at,m.raw_data->>'availability' AS availability,
@@ -97,6 +98,16 @@ function registerOfficeListings(app,pool) {
         availability:'unconfirmed',source_name:officeKey==='marei'?'مكتب مرعي العقاري':undefined});
     } catch (error) { console.error('Public office listings:',error.message);res.status(500).json({error:'تعذر تحميل إعلانات المكاتب'}); }
   }
+  app.get('/api/market/office-options',async(_req,res)=>{
+    try{
+      const rows=(await pool.query(`SELECT DISTINCT m.raw_data->>'office_key' AS key,m.advertiser_name AS name
+        FROM market_listings m WHERE m.status='published' AND m.raw_data->>'import_batch'=ANY($1::text[])
+        AND m.raw_data->>'office_key' IS NOT NULL ORDER BY name`,[publishedBatches])).rows;
+      const choices=new Map(data.offices.map(o=>[o.key,{key:o.key,name:o.name}]));
+      for(const row of rows)if(!choices.has(row.key))choices.set(row.key,row);
+      res.set('Cache-Control','no-store');res.json({data:[...choices.values()]});
+    }catch(error){res.status(500).json({error:'تعذر تحميل خيارات المكاتب'});}
+  });
   app.get('/api/market/offices',(req,res)=>respond(req,res));
   app.get('/api/market/listings/:id',async(req,res)=>{
     try {
@@ -109,4 +120,4 @@ function registerOfficeListings(app,pool) {
   app.get('/api/market/marei',(req,res)=>respond(req,res,'marei'));
 }
 
-module.exports={data,enabledBatch,regionalBatch,publishedBatches,seedOfficeListings,registerOfficeListings,readOfficeListings,readOfficeListing,publicationTime};
+module.exports={data,enabledBatch,regionalBatch,manualBatch,publishedBatches,seedOfficeListings,registerOfficeListings,readOfficeListings,readOfficeListing,publicationTime};

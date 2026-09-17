@@ -1,10 +1,13 @@
 'use strict';
-const catalog={ 'hotels.read':'عرض الفنادق والغرف والحجوزات','hotels.write':'إضافة وتعديل الفنادق والغرف والوسائط والحجوزات','properties.read':'عرض العقارات','properties.write':'إدارة العقارات','finance.read':'عرض التقارير المالية','users.read':'عرض المستخدمين' };
+const catalog={ 'offers.read':'عرض جميع العروض وسجل المراجعة','offers.review':'اعتماد العروض أو رفضها أو إعادتها للمراجعة','offers.create':'إضافة عروض تابعة للمكاتب', 'hotels.read':'عرض الفنادق والغرف والحجوزات','hotels.write':'إضافة وتعديل الفنادق والغرف والوسائط والحجوزات','properties.read':'عرض العقارات','properties.write':'إدارة العقارات','finance.read':'عرض التقارير المالية','users.read':'عرض المستخدمين' };
 const full=user=>user?.role==='admin' && user.admin_permissions==null;
 function allowed(user,req){
  if(full(user))return true;
  if(user?.role!=='admin'||!Array.isArray(user.admin_permissions))return false;
  const p=(req.originalUrl||req.path||'').split('?')[0],read=['GET','HEAD'].includes(req.method);
+ if(p==='/api/admin/offers'||/^\/api\/admin\/offers\/(offices|(?:property|hotel|market)\/[1-9]\d*)$/.test(p))return read&&user.admin_permissions.includes('offers.read');
+ if(p==='/api/admin/offers/office-listings')return req.method==='POST'&&user.admin_permissions.includes('offers.create');
+ if(/^\/api\/admin\/offers\/(property|hotel|market)\/[1-9]\d*\/review$/.test(p))return req.method==='POST'&&user.admin_permissions.includes('offers.review');
  let group=null;
  if(/\/(payments|payouts|finance|commission)(?:\/|$)|\/hotel-(payouts|payments)(?:\/|$)/.test(p))group='finance';
  else if(/^\/api\/office\/hotels?(?:[-/]|$)/.test(p)||/^\/api\/admin\/hotels?(?:[-/]|$)/.test(p))group='hotels';
@@ -13,7 +16,7 @@ function allowed(user,req){
  else if(/^\/api\/admin\/users(?:\/|$)/.test(p))group='users';
  return !!group && user.admin_permissions.includes(group+'.'+(read?'read':'write'));
 }
-function normalize(value){if(!Array.isArray(value)||value.some(p=>!Object.hasOwn(catalog,p)))throw Error('صلاحيات غير صحيحة');const set=new Set(value);for(const p of set)if(p.endsWith('.write'))set.add(p.replace('.write','.read'));return [...set].sort();}
+function normalize(value){if(!Array.isArray(value)||value.some(p=>!Object.hasOwn(catalog,p)))throw Error('صلاحيات غير صحيحة');const set=new Set(value);if(set.has('offers.review')||set.has('offers.create'))set.add('offers.read');for(const p of set)if(p.endsWith('.write'))set.add(p.replace('.write','.read'));return [...set].sort();}
 function register(app,{pool,requireAdmin,bcrypt,ownerEmail}){
  const onlyFull=(req,res,next)=>full(req.user)?next():res.status(403).json({error:'إدارة حسابات الإدارة متاحة للمدير الكامل فقط'});
  app.get('/api/admin/team',requireAdmin,onlyFull,async(req,res)=>{try{res.json({catalog,data:(await pool.query("SELECT id,name,email,is_active,admin_permissions FROM users WHERE role='admin' ORDER BY id")).rows});}catch(e){res.status(500).json({error:'تعذر تحميل فريق الإدارة'});}});

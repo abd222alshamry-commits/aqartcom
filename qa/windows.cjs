@@ -51,7 +51,7 @@ const root=path.resolve(__dirname,'..'),pause=ms=>new Promise(r=>timers.setTimeo
    const suffix=name==='property.html'?'?id='+property:name==='office-public.html'?'?slug=qa-windows':name==='office-property.html'?'?id='+imported:'';
    const p=await page(name,'anonymous',suffix);assert.ok(p.w.document.body.textContent.trim(),name+' has no body');p.report.checks.push('page loaded');p.dom.window.close();
   }
-  for(const name of ['admin.html','admin-team.html','hotel-demo.html','shamcash-admin.html','office.html','office-growth.html','market-monitor.html','regional-agents.html','messages.html','request-dashboard.html','office-request-inbox.html','office-videos.html']){
+  for(const name of ['admin.html','offer-review.html','admin-team.html','hotel-demo.html','shamcash-admin.html','office.html','office-growth.html','market-monitor.html','regional-agents.html','messages.html','request-dashboard.html','office-request-inbox.html','office-videos.html']){
    const p=await page(name,'admin');
    const tabs=[...p.w.document.querySelectorAll('[data-tab]')].map(b=>b.dataset.tab);
    for(const tab of tabs)await p.run('tab '+tab,w=>w.document.querySelector('[data-tab="'+tab+'"]').click());

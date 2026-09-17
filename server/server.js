@@ -316,6 +316,7 @@ const qrUpload=multer({storage,limits:{fileSize:2*1024*1024},fileFilter:(_req,fi
 hotelManualPayments.register(app,{pool,requireAdmin,syncHotel,receiveQr:(req,res,next)=>qrUpload(req,res,error=>error?res.status(400).json({error:'تعذر رفع رمز QR. اختر صورة بحجم أقل من 2 ميغابايت.'}):next())});
 require('./demo-hotels').register(app, { pool, requireAdmin });
 require('./admin-permissions').register(app,{pool,requireAdmin,bcrypt,ownerEmail:process.env.ADMIN_EMAIL});
+require('./offer-review').register(app,{pool,requireAdmin});
 require('./hotel-media').register(app,{pool,requireOfficeMember,ownedHotel,uploadDir,createVideoPoster});
 require('./host-portal').register(app,{pool,requireAuth,requireOfficeMember,ownedHotel});
 

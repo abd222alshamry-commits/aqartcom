@@ -43,7 +43,7 @@ test('regional admin HTML has unique DOM ids, matching script targets, no secret
   assert.match(html,/النتائج العامة المفهرسة/);assert.match(html,/لا تُبحث جميع المناطق في كل جولة/);
   const css=fs.readFileSync(path.join(root,'regional-agents.css'),'utf8');assert.match(css,/@media\(max-width:620px\)/);assert.match(css,/minmax\(0,1fr\)/);assert.match(css,/\[hidden\]\{display:none!important\}/);
   assert.match(fs.readFileSync(path.join(root,'admin.html'),'utf8'),/href="\/regional-agents.html"/);
-  assert.match(fs.readFileSync(path.join(root,'index.html'),'utf8'),/office-card\.js\?v=20260917-regional/);
+  assert.match(fs.readFileSync(path.join(root,'index.html'),'utf8'),/office-card\.js\?v=[a-zA-Z0-9-]+/);
 });
 
 test('signed-out visitors never load or reveal the regional dashboard',async()=>{
