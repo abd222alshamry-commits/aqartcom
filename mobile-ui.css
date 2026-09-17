@@ -57,7 +57,11 @@
   .citygrid{gap:6px}.citygrid button{padding:6px 8px;min-height:38px}
 
   /* Account choices and the assistant no longer cover most of the screen. */
-  #accountModal .modalbox,#authModal .modalbox{width:min(340px,100%);max-height:82dvh;padding:40px 12px 14px}
+  #accountModal .modalbox,#authModal .modalbox{width:min(320px,100%);max-height:82dvh;padding:38px 12px 12px}
+  :is(#accountModal,#authModal) h2{font-size:20px;line-height:1.5;margin:0 0 6px}
+  :is(#accountModal,#authModal) .modalbox > p{font-size:12px;margin:0 0 8px;line-height:1.6}
+  #authModal .modalbox form{gap:8px}
+  #authModal .modalbox form :is(input,button){min-height:40px;padding:7px 9px;font-size:14px;line-height:1.5}
   #accountModal .modalbox{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   #accountModal .modalbox > :is(h2,p,.account-card){grid-column:1/-1;margin:0}
   #accountModal .account-card{padding:10px;overflow-wrap:anywhere}
@@ -85,8 +89,8 @@
   body[data-page="map-search"] .summary{padding:7px;margin:0;font-size:12px}
   body[data-page="map-search"] .mobile-filters{padding:7px 9px;min-height:38px;font-size:12px}
 
-  body[data-page="hotels"] .hero form{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}
-  body[data-page="hotels"] .hero form > :is(#q,button){grid-column:1/-1}
+  body[data-page="hotels"] .hero form{grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:8px;padding:10px}
+  body[data-page="hotels"] .hero form > :is(#q,#city,button){grid-column:1/-1}
   body[data-page="hotels"] .hero :is(input,select,button){min-width:0;height:38px;padding:0 6px;font-size:12px}
   body[data-page="hotel-partner"] :is(.hero,.toolbar,.tabs,.panel){margin-inline:12px;gap:8px}
   body[data-page="hotel-partner"] .toolbar select{min-width:0}
