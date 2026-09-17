@@ -63,7 +63,8 @@ async function readOfficeListings(pool,officeKey) {
         m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.media,
         m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
         m.raw_data->>'source_published_at' AS source_published_at,m.raw_data->>'published_label' AS published_label,
-        m.raw_data->>'availability' AS availability,m.raw_data->>'video_duration' AS video_duration
+        m.raw_data->>'availability' AS availability,m.raw_data->>'video_duration' AS video_duration,
+        m.raw_data->'local_video' AS hosted_video
         FROM market_listings m
         WHERE m.status='published' AND m.raw_data->>'import_batch'=$1
           AND ($2::text IS NULL OR m.raw_data->>'office_key'=$2)

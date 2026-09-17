@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حفظ فيديوهات المكاتب | عقارتكم</title><link rel="stylesheet" href="/office-videos.css"><script src="/site-ui.js"></script><link rel="stylesheet" href="/site-ui.css"><link rel="stylesheet" href="/video-player.css?v=20260917-2"><script src="/video-player.js?v=20260917-2"></script></head>
+<body><header><a href="/" class="brand">⌂ عقارتكم</a><a href="/admin.html">لوحة الإدارة</a></header><main>
+<h1>حفظ فيديوهات المكاتب</h1><p class="intro">احفظ نسخة من الفيديو مع الإعلان ليشاهده الزائر مباشرة داخل الموقع.</p>
+<p id="pageStatus" role="status">جاري التحقق من حساب المدير…</p>
+<section id="manager" hidden>
+<div class="storage"><span id="savedCount"></span><span id="storageSpace"></span></div>
+<form id="videoForm">
+<fieldset id="fields"><legend>١. اختر الإعلان</legend>
+<label for="office">المكتب العقاري</label><select id="office"><option value="">جميع المكاتب</option></select>
+<label for="listing">الإعلان</label><select id="listing" required><option value="">اختر الإعلان</option></select>
+<div id="listingInfo" class="listing-info" hidden><h2 id="listingTitle"></h2><p id="videoState"></p><div id="currentVideo"></div><a id="viewListing" href="#" target="_blank" rel="noopener">عرض الإعلان ↗</a><a id="viewSource" href="#" target="_blank" rel="noopener">المصدر الأصلي ↗</a></div>
+<h2>٢. أضف ملف الفيديو</h2>
+<div class="methods"><label><input type="radio" name="method" value="upload" checked> من ملفات الجوال</label><label><input type="radio" name="method" value="import"> من رابط تنزيل</label></div>
+<div id="fileFields"><label for="videoFile">ملف الفيديو الأصلي</label><input id="videoFile" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"><p class="hint">اختر نسخة الفيديو المحفوظة لديك أو التي أرسلها المكتب.</p></div>
+<div id="urlFields" hidden><label for="videoUrl">رابط ملف الفيديو المباشر</label><input id="videoUrl" type="url" dir="ltr" placeholder="https://example.com/video.mp4"><p class="hint">يحمّل الموقع الملف ويحفظه. رابط صفحة فيسبوك أو يوتيوب لا يصلح هنا.</p></div>
+<p class="hint">حتى 100 ميغابايت و10 دقائق. MP4 / MOV / WebM. نجهّز الفيديو للجوال ونستخرج صورة المعاينة، مع الاحتفاظ بالصوت الموجود في الملف.</p>
+<button id="saveVideo" type="submit">حفظ الفيديو على الموقع</button>
+</fieldset>
+<div id="uploadProgress" hidden><progress id="progress" max="100"></progress><p id="saveStatus" role="status"></p></div><p id="saveError" role="alert" hidden></p>
+</form>
+</section><a id="signIn" href="/" hidden>العودة للموقع لتسجيل الدخول</a>
+</main><script src="/office-videos.js"></script></body></html>

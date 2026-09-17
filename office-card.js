@@ -5,12 +5,16 @@ function sourceUrl(value){try{const url=new URL(value);return url.protocol==='ht
 const phone=value=>/^\+\d{8,15}$/.test(value||'')?value:null;
 window.officeListingCard=function(p){
 const url=sourceUrl(p.external_url),sold=p.availability==='sold',tel=phone(p.phone),wa=phone(p.whatsapp);
+      const hosted=/^\/uploads\/office-[a-f0-9]{32}\.mp4$/.test(p.hosted_video?.url||'')?p.hosted_video:null;
+      const poster=hosted&&/^\/uploads\/office-[a-f0-9]{32}\.jpg$/.test(hosted.poster||'')?hosted.poster:null;
       const thumb=(Array.isArray(p.media)?p.media:[]).find(m=>/^\/assets\/fb-[a-z0-9-]+\.jpg$/.test(m.url||''));
+      const image=poster||thumb?.url;
+      const duration=hosted?Math.floor(hosted.duration/60)+':'+String(Math.floor(hosted.duration%60)).padStart(2,'0'):p.video_duration||'فيديو';
       const details=p.detail_url||'/office-property.html?id='+encodeURIComponent(p.market_id||p.id);
       return `<article class="marei-card${sold?' marei-sold':''}">
-        <a class="marei-preview" data-video-title="${esc(p.title)}" href="${esc(url||'#')}" target="_blank" rel="noopener noreferrer" aria-label="${esc('شاهد فيديو '+p.title)}">
-          ${thumb?`<img src="${esc(thumb.url)}" alt="${esc(thumb.alt||p.title)}" loading="lazy" width="640" height="360">`:''}
-          <span class="marei-play" aria-hidden="true">▶</span><span class="marei-duration">${esc(p.video_duration||'فيديو')}</span>
+        <a class="marei-preview" data-video-title="${esc(p.title)}" href="${esc(hosted?.url||url||'#')}" target="_blank" rel="noopener noreferrer" aria-label="${esc('شاهد فيديو '+p.title)}">
+          ${image?`<img src="${esc(image)}" alt="${esc(thumb?.alt||p.title)}" loading="lazy" width="640" height="360">`:''}
+          <span class="marei-play" aria-hidden="true">▶</span><span class="marei-duration">${esc(duration)}</span>
           ${sold?'<strong class="marei-sold-badge">تم البيع</strong>':''}
         </a><div class="marei-card-body">
         <div class="marei-card-top"><span>${esc(p.advertiser_name)}</span><span class="marei-platform">${p.offer_number?'عرض '+esc(p.offer_number):'فيسبوك'}</span></div>

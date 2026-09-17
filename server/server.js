@@ -1351,6 +1351,7 @@ app.get('/api/admin/inquiries', requireAdmin, async (_req,res)=>{ const r=await 
 
 
 require('./marei-listings').registerMareiListings(app,pool);
+require('./office-videos')(app,{pool,requireAdmin,uploadDir});
 
 // ===== مراقبة السوق العقاري السوري / Meta =====
 function marketToken(){ return process.env.META_MARKET_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''; }
