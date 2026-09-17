@@ -1,0 +1,76 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const express=require('express');const {PGlite}=require('@electric-sql/pglite');
+const manual=require('../server/hotel-manual-payments'),mobile=require('../server/mobile-hotels'),createSettlement=require('../server/payment-settlement');
+
+test('manual hotel transfers stay unpaid until authorized review, with private receipts and single use references',async t=>{
+  const db=new PGlite();await db.waitReady;t.after(()=>db.close());await db.exec(fs.readFileSync(path.join(__dirname,'../server/db/schema.sql'),'utf8'));
+  await db.exec(fs.readFileSync(path.join(__dirname,'../server/db/schema.sql'),'utf8')); // restart-safe migration
+  const pool={query:(...a)=>db.query(...a),connect:async()=>({query:(...a)=>db.query(...a),release(){}})};
+  const admin=(await db.query("INSERT INTO users(name,email,password_hash,role) VALUES('Local test admin','manual@example.test','no-login','admin') RETURNING id")).rows[0].id;
+  const hotel=(await db.query("INSERT INTO hotels(name,slug,city,status) VALUES('Local test hotel','manual-test-hotel','دمشق','active') RETURNING *")).rows[0];
+  const room=(await db.query("INSERT INTO hotel_rooms(hotel_id,name,room_type,max_guests,price,currency,quantity) VALUES($1,'Local test room','double',2,40,'USD',20) RETURNING id",[hotel.id])).rows[0].id;
+  const app=express();app.use(express.json());
+  const requireAdmin=(req,res,next)=>{if(req.get('x-test-role')!=='admin')return res.status(req.get('x-test-role')?403:401).json({error:'Unauthorized'});req.user={id:admin};next();};
+  manual.register(app,{pool,requireAdmin});mobile.register(app,{pool,getCurrentUser:async()=>null,syncHotel:async()=>{},manualPayments:manual.createService(pool)});
+  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+  const base='http://127.0.0.1:'+server.address().port;
+  async function request(route,{body,method,role,token,origin}={}){const r=await fetch(base+route,{method:method||(body?'POST':'GET'),headers:{...(body?{'Content-Type':'application/json'}:{}),...(role?{'x-test-role':role}:{}),...(token?{Authorization:'Bearer '+token}:{}),...(origin?{Origin:origin}:{})},...(body?{body:JSON.stringify(body)}:{})});const json=await r.json();return {...json,paymentState:json.status,status:r.status};}
+  const prefix='/api/admin/shamcash-manual',fields={hotel_id:hotel.id,room_id:room,check_in:'2099-06-01',check_out:'2099-06-03',adults:2,rooms_count:1};
+  const getQuote=()=>request('/api/mobile/hotels/quote?'+new URLSearchParams(fields));
+  const q0=await getQuote();assert.equal(q0.status,200);assert.equal(q0.data.payment_methods[1].available,false);assert.match(q0.data.payment_methods[1].reason,/إعداد حساب/);
+  assert.equal((await request(prefix+'/settings')).status,401);assert.equal((await request(prefix+'/settings',{role:'user'})).status,403);
+  const config={version:1,enabled:true,recipient:'TEST-ONLY-NOT-A-REAL-WALLET',recipient_label:'Local test account',qr_url:'',currency:'SYP',usd_to_syp_rate:12000};
+  const save=b=>request(prefix+'/settings',{method:'PUT',body:b,role:'admin'});
+  assert.equal((await save({...config,recipient:''})).status,400);
+  assert.equal((await save({...config,qr_url:'https://external.example/qr.png'})).status,400);
+  assert.equal((await request(prefix+'/settings',{method:'PUT',body:config,role:'admin',origin:'https://foreign.example'})).status,403);
+  assert.equal((await save(config)).status,200);assert.equal((await save(config)).status,409);
+  const q=(await getQuote()).data,method=q.payment_methods[1];assert.equal(method.available,true);assert.equal(method.amount,960000);assert.equal(method.currency,'SYP');
+  assert.equal(manual.option({...config,version:2},q,{...hotel,slug:'aqartkom-demo-hotel-v1-damascus'}).available,false);
+  assert.equal(manual.option({...config,usd_to_syp_rate:null},q,hotel).available,false);
+  const makeBody=()=>({...fields,guest_name:'Local test guest',guest_phone:'00000000',payment_method:'shamcash_manual',expected_total:q.total,expected_currency:q.currency,idempotency_key:crypto.randomUUID(),payment_access_token:crypto.randomBytes(32).toString('hex'),payment_settings_version:method.settings_version,expected_transfer_amount:method.amount,expected_transfer_currency:method.currency});
+  const book=b=>request('/api/mobile/hotels/book',{body:b});
+  assert.equal((await book({...makeBody(),expected_transfer_amount:1})).status,409);
+  assert.equal((await book({...makeBody(),payment_access_token:'bad'})).status,400);
+  assert.equal((await db.query('SELECT COUNT(*)::int n FROM hotel_bookings')).rows[0].n,0);
+  const body=makeBody(),booked=await book(body);assert.equal(booked.status,201,JSON.stringify(booked));assert.equal(booked.data.status,'pending');assert.equal(booked.data.payment_status,'pending');
+  assert.equal((await book(body)).manual_payment.checkout_url,booked.manual_payment.checkout_url);
+  assert.equal((await book({...body,payment_access_token:crypto.randomBytes(32).toString('hex')})).status,409);
+  const route='/api/hotel-manual-payments/'+booked.data.booking_code;
+  assert.equal((await request(route)).status,404);assert.equal((await request(route,{token:'0'.repeat(64)})).status,404);
+  const publicView=await request(route,{token:body.payment_access_token});assert.equal(publicView.data.amount,'960000.00');assert.equal(publicView.data.access_token_hash,undefined);assert.equal(publicView.data.guest_phone,undefined);assert.equal(publicView.data.accepting_transfers,true);
+  let payments=(await request(prefix+'/payments',{role:'admin'})).data;const paymentId=payments[0].id;
+  const review=(id,action,extra={})=>request(prefix+'/payments/'+id+'/review',{role:'admin',body:{action,received_confirmed:true,...extra}});
+  assert.equal((await review(paymentId,'approve')).status,409);
+  const submit=(b,code,ref)=>request('/api/hotel-manual-payments/'+code+'/submit',{token:b.payment_access_token,body:{transaction_reference:ref}});
+  const sent=await submit(body,booked.data.booking_code,'123456');assert.equal(sent.status,200);assert.equal(sent.paymentState,'pending_review');
+  assert.equal((await db.query('SELECT status FROM hotel_manual_payments WHERE id=$1',[paymentId])).rows[0].status,'pending_review');
+  assert.equal((await db.query('SELECT payment_status FROM hotel_bookings WHERE booking_code=$1',[booked.data.booking_code])).rows[0].payment_status,'pending');
+  assert.equal((await submit(body,booked.data.booking_code,'123456')).repeated,true);
+  assert.equal((await request(prefix+'/payments/'+paymentId+'/review',{role:'user',body:{action:'approve',received_confirmed:true}})).status,403);
+  assert.equal((await review(paymentId,'approve',{received_confirmed:false})).status,400);
+  const body2=makeBody(),booked2=await book(body2);assert.equal(booked2.status,201);
+  assert.equal((await submit(body2,booked2.data.booking_code,'123456')).status,409);
+  assert.equal((await review(paymentId,'approve')).ok,true);
+  assert.equal((await review(paymentId,'approve')).repeated,true);
+  let state=(await db.query('SELECT status,payment_status FROM hotel_bookings WHERE booking_code=$1',[booked.data.booking_code])).rows[0];assert.deepEqual(state,{status:'confirmed',payment_status:'paid'});
+  assert.equal((await db.query("SELECT COUNT(*)::int n FROM hotel_booking_events WHERE booking_id=(SELECT id FROM hotel_bookings WHERE booking_code=$1) AND event_type='manual_payment_approved'",[booked.data.booking_code])).rows[0].n,1);
+  assert.equal((await db.query("SELECT COUNT(*)::int n FROM wallet_transactions")).rows[0].n,0);
+  assert.equal((await request(route,{token:body.payment_access_token})).data.status,'approved');
+  await submit(body2,booked2.data.booking_code,'234567');payments=(await request(prefix+'/payments',{role:'admin'})).data;const payment2=payments.find(p=>p.booking_code===booked2.data.booking_code);
+  assert.equal((await review(payment2.id,'reject',{note:''})).status,400);assert.equal((await review(payment2.id,'reject',{note:'Test: no transfer received'})).ok,true);
+  state=(await db.query('SELECT status,payment_status FROM hotel_bookings WHERE booking_code=$1',[booked2.data.booking_code])).rows[0];assert.deepEqual(state,{status:'cancelled',payment_status:'pending'});
+  assert.equal((await review(payment2.id,'approve')).status,409);
+  const body3=makeBody(),booked3=await book(body3);assert.equal(booked3.status,201);
+  await db.query("UPDATE hotel_bookings SET status='cancelled' WHERE booking_code=$1",[booked3.data.booking_code]);assert.equal((await submit(body3,booked3.data.booking_code,'345678')).status,409);
+  // A manually claimed transfer also cannot fund an office wallet.
+  const office=(await db.query("INSERT INTO offices(owner_id,name,slug) VALUES($1,'Local office','manual-office') RETURNING id",[admin])).rows[0].id;
+  const walletPayment=(await db.query("INSERT INTO payments(user_id,office_id,amount,currency,provider,metadata) VALUES($1,$2,960000,'SYP','shamcash',$3) RETURNING id",[admin,office,JSON.stringify({kind:'wallet_topup'})])).rows[0].id;
+  await assert.rejects(createSettlement({pool,newFinanceInvoiceNo:()=> 'TEST'})(walletPayment,'123456',{}),/provider_payment_already_used/);
+  // Account changes stop new transfers using an old snapshot; old receipts remain reviewable.
+  const body4=makeBody(),booked4=await book(body4);assert.equal(booked4.status,201);
+  assert.equal((await save({...config,version:2,recipient:'NEW-TEST-ONLY-ACCOUNT'})).status,200);
+  assert.equal((await request('/api/hotel-manual-payments/'+booked4.data.booking_code,{token:body4.payment_access_token})).data.accepting_transfers,false);
+  assert.equal((await book(makeBody())).status,409);
+});

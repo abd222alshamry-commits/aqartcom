@@ -1224,3 +1224,28 @@ CREATE TABLE IF NOT EXISTS hotel_channel_reservation_runs (
 ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS idempotency_key UUID;
 ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS request_hash VARCHAR(64);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_hotel_booking_idempotency ON hotel_bookings(idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- Manual Sham Cash hotel payments. No payment is approved by a guest submission.
+CREATE TABLE IF NOT EXISTS manual_shamcash_settings (
+ id INTEGER PRIMARY KEY CHECK(id=1), enabled BOOLEAN NOT NULL DEFAULT FALSE,
+ recipient TEXT NOT NULL DEFAULT '', recipient_label VARCHAR(180) NOT NULL DEFAULT '',
+ qr_url TEXT NOT NULL DEFAULT '', currency VARCHAR(3) NOT NULL DEFAULT 'SYP' CHECK(currency IN ('SYP','USD')),
+ usd_to_syp_rate NUMERIC(18,6), version INTEGER NOT NULL DEFAULT 1,
+ updated_by BIGINT REFERENCES users(id), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO manual_shamcash_settings(id) VALUES(1) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS manual_shamcash_settings_audit (
+ id BIGSERIAL PRIMARY KEY, actor_user_id BIGINT REFERENCES users(id),
+ settings JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS hotel_manual_payments (
+ id BIGSERIAL PRIMARY KEY, booking_id BIGINT NOT NULL UNIQUE REFERENCES hotel_bookings(id),
+ access_token_hash VARCHAR(64) NOT NULL, amount NUMERIC(18,2) NOT NULL CHECK(amount>0),
+ currency VARCHAR(3) NOT NULL, recipient TEXT NOT NULL, recipient_label TEXT NOT NULL,
+ qr_url TEXT NOT NULL DEFAULT '', settings_version INTEGER NOT NULL, exchange_rate NUMERIC(18,6),
+ status VARCHAR(30) NOT NULL DEFAULT 'awaiting_transfer' CHECK(status IN ('awaiting_transfer','pending_review','approved','rejected')),
+ transaction_reference VARCHAR(80), submitted_at TIMESTAMPTZ, reviewed_at TIMESTAMPTZ,
+ reviewed_by BIGINT REFERENCES users(id), review_note VARCHAR(1000), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_shamcash_reference ON hotel_manual_payments(transaction_reference)
+ WHERE transaction_reference IS NOT NULL AND status IN ('pending_review','approved');

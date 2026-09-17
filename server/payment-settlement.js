@@ -12,6 +12,7 @@ return async function finalizePaidPayment(paymentId, providerPaymentId, provider
     if(!Number.isFinite(Number(pay.amount)) || Number(pay.amount)<=0) throw new Error('invalid_payment_amount');
     if(providerPaymentId) await client.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[pay.provider,String(providerPaymentId)]);
     if(providerPaymentId){const d=(await client.query(`SELECT id FROM payments WHERE provider=$1 AND provider_payment_id=$2 AND id<>$3 LIMIT 1`,[pay.provider,providerPaymentId,pay.id])).rows[0];if(d)throw new Error('provider_payment_already_used');}
+    if(pay.provider==='shamcash' && providerPaymentId){const claimed=(await client.query("SELECT id FROM hotel_manual_payments WHERE transaction_reference=$1 AND status IN ('pending_review','approved') LIMIT 1",[providerPaymentId])).rows[0];if(claimed)throw new Error('provider_payment_already_used');}
     const meta=pay.metadata||{};
     if(meta.kind==='wallet_topup'){
       await client.query(`INSERT INTO office_wallets(office_id,currency) VALUES($1,$2) ON CONFLICT (office_id) DO NOTHING`,[pay.office_id,pay.currency]);

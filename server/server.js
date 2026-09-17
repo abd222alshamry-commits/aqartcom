@@ -303,7 +303,10 @@ app.post('/api/hotels/book', async(req,res)=>{try{
   await client.query(`INSERT INTO hotel_booking_events(booking_id,event_type,note,actor_user_id) VALUES($1,'created','تم إنشاء الحجز', $2)`,[r.rows[0].id,userId]); const inv='AQHINV-'+Date.now().toString(36).toUpperCase(); await client.query(`INSERT INTO hotel_invoices(booking_id,invoice_number,gross_amount,commission_amount,net_amount,currency) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,[r.rows[0].id,inv,total,commission,net,rate.currency]); await client.query('COMMIT'); client.release(); res.status(201).json({data:r.rows[0],invoice_number:inv}); syncHotel(pool,h.id).catch(e=>console.error('OTA post-booking sync',e.message));
 }catch(e){try{await client.query('ROLLBACK')}catch(_){} client.release(); console.error(e);res.status(500).json({error:'تعذر إنشاء الحجز'});} }catch(e){console.error(e);res.status(500).json({error:'تعذر إنشاء الحجز'});}});
 
-require('./mobile-hotels').register(app, { pool, getCurrentUser, syncHotel });
+const hotelManualPayments=require('./hotel-manual-payments');
+require('./mobile-hotels').register(app,{pool,getCurrentUser,syncHotel,manualPayments:hotelManualPayments.createService(pool)});
+const qrUpload=multer({storage,limits:{fileSize:2*1024*1024},fileFilter:(_req,file,cb)=>cb(null,/^image\/(jpeg|png|webp)$/.test(file.mimetype))}).single('qr');
+hotelManualPayments.register(app,{pool,requireAdmin,syncHotel,receiveQr:(req,res,next)=>qrUpload(req,res,error=>error?res.status(400).json({error:'تعذر رفع رمز QR. اختر صورة بحجم أقل من 2 ميغابايت.'}):next())});
 require('./demo-hotels').register(app, { pool, requireAdmin });
 
 app.get('/api/office/hotels',requireOfficeMember,async(req,res)=>{try{const hs=(await pool.query(`SELECT h.*,(SELECT COUNT(*) FROM hotel_rooms r WHERE r.hotel_id=h.id)::int room_types,(SELECT COUNT(*) FROM hotel_bookings b WHERE b.hotel_id=h.id AND b.status IN ('pending','confirmed'))::int open_bookings FROM hotels h WHERE h.office_id=$1 OR h.owner_id=$2 ORDER BY h.created_at DESC`,[req.office.id,req.office.owner_id])).rows;res.json({data:hs});}catch(e){res.status(500).json({error:'تعذر تحميل فنادق المكتب'});}});
