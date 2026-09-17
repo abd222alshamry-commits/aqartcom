@@ -50,7 +50,7 @@
     const stage = viewer.querySelector('.video-viewer-stage');
     const tools = viewer.querySelector('.video-viewer-tools');
     const closeButton = viewer.querySelector('.video-viewer-close');
-    let media = null, frameObserver = null, closed = false, enteredFullscreen = false, historyAdded = false;
+    let media = null, frameObserver = null, facebookController = null, playbackTimer = null, closed = false, enteredFullscreen = false, historyAdded = false;
     const historyKey = 'video-' + Date.now();
     const inertElements = Array.from(document.body.children).filter(el => el !== viewer).map(el => [el, el.inert]);
     inertElements.forEach(([el]) => { el.inert = true; });
@@ -64,6 +64,8 @@
       document.removeEventListener('fullscreenchange', onFullscreen);
       document.removeEventListener('webkitfullscreenchange', onFullscreen);
       window.removeEventListener('pagehide', onHide);
+      clearTimeout(playbackTimer);
+      facebookController?.destroy();
       frameObserver?.disconnect();
       window.removeEventListener('resize', fitFrame);
       if (media?.tagName === 'VIDEO') {
@@ -144,6 +146,40 @@
         media.addEventListener('webkitendfullscreen', () => close(), {once:true});
       }
       play();
+    } else if (source.type === 'facebook' && window.FacebookPropertyPlayer) {
+      const status = document.createElement('p');
+      status.className = 'video-viewer-status'; status.setAttribute('role', 'status');
+      status.textContent = 'جاري تشغيل الفيديو…'; stage.append(status);
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'video-viewer-retry';
+      retry.textContent = '▶ تشغيل بالصوت'; retry.hidden = true; stage.append(retry);
+      let started = false;
+      function showRetry() {
+        if (closed || started) return;
+        status.textContent = 'اضغط للتشغيل إذا منعه المتصفح تلقائيًا.';
+        status.hidden = false; retry.hidden = false;
+      }
+      retry.onclick = () => { facebookController?.playWithSound(); };
+      tools.textContent = 'تحكم بالصوت من رمز السماعة داخل الفيديو.';
+      requestFullscreen();
+      facebookController = window.FacebookPropertyPlayer.mount({
+        stage, url:source.url, autoStart:true,
+        onReady() { if (!closed) playbackTimer = setTimeout(showRetry, 8000); },
+        onPlaying() { started = true; clearTimeout(playbackTimer); status.hidden = true; retry.hidden = true; },
+        onError() {
+          if (closed) return;
+          clearTimeout(playbackTimer); facebookController?.destroy();
+          status.hidden = true; retry.hidden = true;
+          media = document.createElement('iframe');
+          media.title = video.title || 'فيديو العقار';
+          media.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+          media.allowFullscreen = true; media.src = source.embed; stage.append(media);
+          fitFrame();
+          if (window.ResizeObserver) { frameObserver = new ResizeObserver(fitFrame); frameObserver.observe(stage); }
+          window.addEventListener('resize', fitFrame);
+          tools.textContent = 'تعذر التشغيل التلقائي. اضغط ▶ داخل الفيديو للتشغيل بالصوت.';
+        }
+      });
     } else if (source.embed) {
       media = document.createElement('iframe');
       media.title = video.title || 'فيديو العقار';

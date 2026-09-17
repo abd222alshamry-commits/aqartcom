@@ -22,7 +22,7 @@
     }).catch(error => { sdkPromise = null; throw error; });
     return sdkPromise;
   }
-  function mount({stage, url, onReady = () => {}, onPlaying = () => {}, onError = () => {}}) {
+  function mount({stage, url, autoStart = false, onReady = () => {}, onPlaying = () => {}, onError = () => {}}) {
     let disposed = false, api, player, readyHandler, timer, didStart = false;
     const subscriptions = [];
     const host = document.createElement('div');
@@ -34,7 +34,7 @@
     widget.setAttribute('data-href', url);
     widget.setAttribute('data-width', '500');
     widget.setAttribute('data-allowfullscreen', 'true');
-    widget.setAttribute('data-autoplay', 'true');
+    widget.setAttribute('data-autoplay', String(autoStart));
     widget.setAttribute('data-show-text', 'false');
     host.append(widget); stage.append(host);
     function fit() {
@@ -46,7 +46,8 @@
       frame.title = 'فيديو العقار من فيسبوك';
       const width = Number(frame.getAttribute('width')) || 500;
       const height = Number(frame.getAttribute('height')) || 889;
-      const scale = Math.min(stage.clientWidth / width, stage.clientHeight / height);
+      const ratios = [stage.clientWidth / width, stage.clientHeight / height];
+      const scale = stage.closest('.video-inline-preview') ? Math.max(...ratios) : Math.min(...ratios);
       host.style.width = width + 'px'; host.style.height = height + 'px';
       host.style.transform = `translate(-50%,-50%) scale(${Math.max(.01, scale)})`;
     }
@@ -81,7 +82,8 @@
           onPlaying();
         })]);
         subscriptions.push(['error', player.subscribe('error', fail)]);
-        fit(); onReady(); playWithSound();
+        fit(); player.unmute(); onReady();
+        if (autoStart) playWithSound();
       };
       api.Event.subscribe('xfbml.ready', readyHandler);
       timer = setTimeout(() => fail(new Error('Facebook video controls unavailable')), 15000);
@@ -89,6 +91,7 @@
     }).catch(fail);
     return {
       playWithSound,
+      pause() { try { player?.pause(); } catch (_) {} },
       destroy() {
         if (disposed) return;
         disposed = true; clearTimeout(timer);
