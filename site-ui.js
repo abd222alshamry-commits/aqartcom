@@ -68,6 +68,7 @@
       applyTheme();
     });
     applyTheme();
+    if(host&&!document.querySelector('a[href="/sol.html"]')){const link=document.createElement('a');link.href='/sol.html';link.textContent='✦ سول';link.className='sol-entry';host.append(link);}
     decorateWithin(document.body);
     // Contact links also arrive through pagination, property details and modal rendering.
     new MutationObserver(records => {

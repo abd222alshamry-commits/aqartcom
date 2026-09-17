@@ -1,2 +1,2 @@
-self.addEventListener('push',event=>{let d={title:'عقارتكم',body:'لديك تنبيه جديد',url:'/'};try{d={...d,...event.data.json()}}catch(_){}event.waitUntil(self.registration.showNotification(d.title,{body:d.body,icon:'/favicon.ico',badge:'/favicon.ico',data:{url:d.url}}));});
-self.addEventListener('notificationclick',event=>{event.notification.close();const url=event.notification.data?.url||'/';event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(cs=>{for(const c of cs){if('focus' in c){c.navigate(url);return c.focus();}}return clients.openWindow(url);}));});
+// Compatibility for older installed clients: one worker owns offline and push.
+importScripts('/service-worker.js');

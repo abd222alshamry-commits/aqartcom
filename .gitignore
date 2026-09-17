@@ -20,3 +20,6 @@ qa/results.json
 qa/*.log
 
 qa/windows-results.json
+
+sol-runtime/
+qa/sol-model-cache/

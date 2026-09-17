@@ -11,3 +11,5 @@ tests
 *.zip
 
 qa
+
+sol-runtime

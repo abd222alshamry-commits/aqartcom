@@ -36,7 +36,7 @@ test('advertiser contacts normalize numerals and do not guess country codes', ()
 function worker() {
   const handlers = {}, deleted = [], opened = [], cached = [];
   const context = {URL, location: {origin: 'https://aqartkom.test'}, fetch: async () => { throw Error('offline'); },
-    caches: {keys: async () => ['aqartkom-v60-shell-v1', 'aqartkom-v92-public-v1', 'aqartkom-v93-theme-v1', 'other-app'], delete: async k => deleted.push(k), match: async k => ({cached: k}), open: async () => ({addAll: async list => cached.push(...list)})},
+    caches: {keys: async () => ['aqartkom-v60-shell-v1', 'aqartkom-v92-public-v1', 'aqartkom-v93-theme-v1', 'aqartkom-v93-sol-shell-v1', 'aqartkom-sol-models-v1', 'aqartkom-sol-runtime-v1', 'other-app'], delete: async k => deleted.push(k), match: async k => ({cached: k}), open: async () => ({addAll: async list => cached.push(...list)})},
     clients: {claim: async () => {}, matchAll: async () => [], openWindow: async u => opened.push(u)},
     self: {addEventListener: (name, callback) => { handlers[name] = callback; }, skipWaiting: async () => {}}};
   context.self.clients = context.clients;
@@ -46,9 +46,9 @@ function worker() {
 test('offline cache excludes personal pages and removes only app-owned older caches', async () => {
   const w = worker(); let work;
   w.handlers.install({waitUntil: p => work = p}); await work;
-  assert.deepEqual(w.cached, ['/site-ui.js', '/site-ui.css', '/offline.html', '/icons/icon-192.png', '/icons/icon-512.png']);
+  assert.deepEqual(w.cached, ['/site-ui.js', '/site-ui.css', '/offline.html', '/icons/icon-192.png', '/icons/icon-512.png', '/sol.html', '/sol.css', '/sol.js', '/sol-config.js', '/sol-knowledge.js', '/sol-storage.js', '/sol-worker.js', '/manifest.webmanifest']);
   w.handlers.activate({waitUntil: p => work = p}); await work;
-  assert.deepEqual(w.deleted, ['aqartkom-v60-shell-v1', 'aqartkom-v92-public-v1']);
+  assert.deepEqual(w.deleted, ['aqartkom-v60-shell-v1', 'aqartkom-v92-public-v1', 'aqartkom-v93-theme-v1']);
 });
 test('API and attachments never receive cached responses; navigation gets offline page', async () => {
   const w = worker();

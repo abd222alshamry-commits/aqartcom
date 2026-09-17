@@ -317,6 +317,7 @@ hotelManualPayments.register(app,{pool,requireAdmin,syncHotel,receiveQr:(req,res
 require('./demo-hotels').register(app, { pool, requireAdmin });
 require('./admin-permissions').register(app,{pool,requireAdmin,bcrypt,ownerEmail:process.env.ADMIN_EMAIL});
 require('./offer-review').register(app,{pool,requireAdmin});
+require('./sol-catalog').register(app,{pool});
 require('./hotel-media').register(app,{pool,requireOfficeMember,ownedHotel,uploadDir,createVideoPoster});
 require('./host-portal').register(app,{pool,requireAuth,requireOfficeMember,ownedHotel});
 

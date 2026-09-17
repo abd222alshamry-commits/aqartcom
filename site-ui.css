@@ -61,3 +61,5 @@ html[data-theme="dark"] :is(.leaflet-popup-content-wrapper,.leaflet-popup-tip,.l
 html[data-theme="dark"] .leaflet-control-attribution a{color:#a9d3ff}
 html[data-theme="dark"] .me .bubble{background:#234b6c!important}
 html[data-theme="dark"] .theme-toggle{background:#20374f!important;color:#f2cd73!important}
+
+.sol-entry{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid currentColor;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none}

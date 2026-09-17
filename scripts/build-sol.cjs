@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),config=require('../sol-config');
+const input=path.join(root,'node_modules/@huggingface/transformers'),output=path.join(root,config.runtimeBase);
+if(JSON.parse(fs.readFileSync(input+'/package.json')).version!==config.runtimeVersion)throw Error('Unexpected Sol runtime version');
+fs.mkdirSync(output,{recursive:true});
+for(const file of config.runtimeFiles)fs.copyFileSync(path.join(input,'dist',file==='transformers.min.mjs'?'transformers.min.js':file),path.join(output,file));
+fs.copyFileSync(input+'/LICENSE',output+'/LICENSE-transformers.txt');
+fs.copyFileSync(path.join(root,'scripts/ONNX-RUNTIME-LICENSE.txt'),output+'/LICENSE-onnxruntime.txt');
+console.log('Built self-hosted Sol runtime: '+config.runtimeFiles.length+' assets');
