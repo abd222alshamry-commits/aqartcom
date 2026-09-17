@@ -36,7 +36,7 @@ test('advertiser contacts normalize numerals and do not guess country codes', ()
 function worker() {
   const handlers = {}, deleted = [], opened = [], cached = [];
   const context = {URL, location: {origin: 'https://aqartkom.test'}, fetch: async () => { throw Error('offline'); },
-    caches: {keys: async () => ['aqartkom-v60-shell-v1', 'aqartkom-v92-public-v1', 'aqartkom-v93-theme-v1', 'aqartkom-v93-sol-shell-v1', 'aqartkom-sol-models-v1', 'aqartkom-sol-runtime-v1', 'other-app'], delete: async k => deleted.push(k), match: async k => ({cached: k}), open: async () => ({addAll: async list => cached.push(...list)})},
+    caches: {keys: async () => ['aqartkom-v60-shell-v1', 'aqartkom-v92-public-v1', 'aqartkom-v93-theme-v1', 'aqartkom-v93-sol-shell-v2', 'aqartkom-sol-models-v1', 'aqartkom-sol-runtime-v1', 'other-app'], delete: async k => deleted.push(k), match: async k => ({cached: k}), open: async () => ({addAll: async list => cached.push(...list)})},
     clients: {claim: async () => {}, matchAll: async () => [], openWindow: async u => opened.push(u)},
     self: {addEventListener: (name, callback) => { handlers[name] = callback; }, skipWaiting: async () => {}}};
   context.self.clients = context.clients;

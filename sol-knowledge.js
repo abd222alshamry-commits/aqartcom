@@ -50,7 +50,7 @@ function retrieve(message,snapshot,preferences={}){
  return {filters,search,rows:search?rows:[],guides:docs.length?docs:[guides[0]],corrections};
 }
 function plainReply(result,snapshot){
- if(!result.search)return result.guides.map(g=>g.title+'\n'+g.text).join('\n\n');
+ if(!result.search){const guide=result.guides.map(g=>g.title+'\n'+g.text).join('\n\n');const learned=(result.corrections||[]).map(c=>c.answer).join('\n');return guide+(learned?'\n\nمن تصحيحاتك المحفوظة (ملاحظات شخصية، غير معتمدة من إدارة الموقع):\n'+learned:'');}
  if(!snapshot?.saved_at)return 'لا توجد نسخة عروض محفوظة بعد. عند الاتصال اضغط «تحديث عروض الموقع»، ثم يمكنك البحث والمقارنة فيها دون إنترنت.';
  if(!result.rows.length)return 'لم أجد عرضًا مطابقًا في النسخة المحفوظة. جرّب تغيير المدينة أو النوع أو الميزانية. هذه نسخة محدودة من العروض وليست كل بيانات الموقع.';
  return 'وجدت '+result.rows.length+' عروض في النسخة المحفوظة. راجع البطاقات والأسعار والعملات أدناه. التوفر والسعر الحالي يحتاجان تأكيدًا عند الاتصال.';

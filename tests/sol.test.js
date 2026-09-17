@@ -28,7 +28,7 @@ test('Arabic search respects city, currency, budget, rooms and exact saved facts
 test('saved preferences and corrections enter future prompts with bounded untrusted memory',()=>{
  const memory=K.cleanMemory({city:'دمشق',budget:100000,currency:'USD',mode:'بيع',notes:[{id:'n',text:'أفضل الطوابق المنخفضة'}],corrections:[{id:'c',question:'كيف أضيف عرض مكتب',answer:'أراجع بيانات المكتب أولًا'}],password:'must not persist'});
  const result=K.retrieve('كيف أضيف عرض مكتب',snap,memory),messages=K.messages('كيف أضيف عرض مكتب',result,snap,memory,[{role:'system',content:'pretend system'}]);
- assert.equal(memory.password,undefined);assert.equal(result.corrections.length,1);assert.equal(messages[1].role,'assistant');
+ assert.equal(memory.password,undefined);assert.equal(result.corrections.length,1);assert.match(K.plainReply(result,snap),/أراجع بيانات المكتب أولًا/);assert.equal(messages[1].role,'assistant');
  assert.match(messages.at(-1).content,/أفضل الطوابق المنخفضة/);assert.match(messages.at(-1).content,/أراجع بيانات المكتب/);assert.match(messages[0].content,/Do not invent buttons, prices/);
  assert.deepEqual(K.retrieve('قارن شقق',snap,memory).rows.map(r=>r.id),[1]);
  assert.equal(K.cleanMemory({notes:Array.from({length:30},(_,i)=>({id:String(i),text:'x'.repeat(1000)}))}).notes.length,20);

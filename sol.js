@@ -36,7 +36,7 @@ async function inspectModel(){const token=++modelCheck,p=selected();ready=false;
 async function ensureShell(){
  if(!('serviceWorker' in navigator)){announce('offlinePage','الحفظ غير مدعوم');return;}
  try{
-  const check=async()=>{const cache=await caches.open('aqartkom-v93-sol-shell-v1');const files=['/sol.html','/sol.css','/sol.js','/sol-config.js','/sol-knowledge.js','/sol-storage.js','/sol-worker.js'];const saved=await Promise.all(files.map(f=>cache.match(f)));announce('offlinePage',saved.every(Boolean)?'الصفحة محفوظة':'جارٍ حفظ الصفحة');};
+  const check=async()=>{const cache=await caches.open('aqartkom-v93-sol-shell-v2');const files=['/sol.html','/sol.css','/sol.js','/sol-config.js','/sol-knowledge.js','/sol-storage.js','/sol-worker.js'];const saved=await Promise.all(files.map(f=>cache.match(f)));announce('offlinePage',saved.every(Boolean)?'الصفحة محفوظة':'جارٍ حفظ الصفحة');};
   const registration=await navigator.serviceWorker.register('/service-worker.js');
   const observe=()=>{const sw=registration.installing;if(sw)sw.addEventListener('statechange',()=>{if(sw.state==='activated')check().catch(()=>{});});};
   observe();registration.addEventListener('updatefound',observe);navigator.serviceWorker.addEventListener('controllerchange',()=>check().catch(()=>{}));
