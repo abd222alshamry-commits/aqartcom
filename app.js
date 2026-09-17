@@ -91,7 +91,7 @@ function openUserAccount(){const m=modalHtml('accountModal',`<h2>حسابي</h2>
 
 // Search / navigation
 document.getElementById('saveSearchBtn')?.addEventListener('click',saveCurrentSearch);if('serviceWorker' in navigator)navigator.serviceWorker.register('/push-sw.js').catch(()=>{});loadProperties();me();
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{if(t.dataset.mode==='sell'){if(!currentUser)openAuth();else openProperty();return}document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');currentMode=t.dataset.mode;refreshGeoSearch()});
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{if(t.dataset.mode==='sell'){openProperty();return}document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');currentMode=t.dataset.mode;refreshGeoSearch()});
 for(const [selector,mode] of [['a[href="#rent"]','إيجار'],['a[data-sale-link]','بيع']])document.querySelectorAll(selector).forEach(link=>link.onclick=e=>{e.preventDefault();document.querySelector(`.tab[data-mode="${mode}"]`).click();document.getElementById('listings').scrollIntoView({behavior:'smooth'});});
 document.getElementById('search').onsubmit=async e=>{e.preventDefault();const q=new URLSearchParams({mode:currentMode,currency:displayCurrency});const city=document.getElementById('city').value,type=document.getElementById('type').value,min=document.getElementById('min').value,max=document.getElementById('max').value,rooms=document.getElementById('rooms').value;if(city)q.set('city',city);if(type)q.set('type',type);if(min)q.set('minPrice',min);if(max)q.set('maxPrice',max);if(rooms)q.set('rooms',rooms);await loadProperties(q.toString(),'search');document.getElementById('resultNote').textContent=`تم العثور على ${properties.length} إعلانًا مطابقًا.`;document.getElementById('listings').scrollIntoView({behavior:'smooth'})};
 document.querySelectorAll('.categories button[data-type]').forEach(b=>b.onclick=()=>{document.getElementById('type').value=b.dataset.type;loadProperties(`type=${encodeURIComponent(b.dataset.type)}&mode=${encodeURIComponent(currentMode)}`,'search')});document.querySelectorAll('.citygrid button').forEach(b=>b.onclick=()=>{const city=document.getElementById('city');city.value=b.dataset.city;city.dispatchEvent(new Event('change'));loadProperties(`city=${encodeURIComponent(b.dataset.city)}`,'search')});document.getElementById('all').onclick=e=>{e.preventDefault();currentMode='';document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===''));document.getElementById('officeFilter').value='';document.getElementById('availabilityFilter').value='all';['type','min','max','rooms'].forEach(id=>document.getElementById(id).value='');document.getElementById('city').value='';document.getElementById('city').dispatchEvent(new Event('change'));loadProperties('', 'search')};document.getElementById('fav').onclick=()=>{if(!currentUser)return openAuth();render(properties.filter(p=>favorites.has(Number(p.id))))};
@@ -124,8 +124,116 @@ document.querySelectorAll('.categories button[data-type]').forEach(b=>b.onclick=
   mobile.addEventListener('change', close);
 })();
 
-function openProperty(){const m=modalHtml('propertyModal','<h2>أضف عقارك</h2><p>سيتم نشر العقار باسم حسابك.</p>','<form id="property"><input name="title" required placeholder="عنوان الإعلان"><select name="type" required><option value="">نوع العقار</option><option>شقة</option><option>منزل</option><option>فيلا</option><option>أرض</option><option>محل تجاري</option><option>مكتب</option><option>بناء</option><option>مزرعة</option></select><select name="mode"><option>بيع</option><option>إيجار</option></select><input name="city" required placeholder="المدينة"><input name="district" placeholder="المنطقة"><input name="price" required type="number" placeholder="السعر"><label>عملة السعر<select name="currency"><option >USD</option><option >SYP</option><option >SAR</option><option >EUR</option><option >AED</option><option >GBP</option><option >KWD</option><option >QAR</option><option >CAD</option><option >AUD</option><option >JPY</option><option >CHF</option><option >SGD</option></select></label><input name="area" type="number" placeholder="المساحة م²"><input name="rooms" type="number" placeholder="غرف النوم"><input name="baths" type="number" placeholder="دورات المياه"><textarea name="description" placeholder="وصف العقار"></textarea><div class="full"><b>موقع العقار (اختياري)</b><div id="newPropertyMap" class="location-picker"></div><div class="location-fields"><input name="latitude" placeholder="خط العرض"><input name="longitude" placeholder="خط الطول"></div><small>اضغط على الخريطة لتحديد موقع العقار، أو اتركه فارغًا.</small></div><button>حفظ الإعلان</button></form>');if(typeof L!=='undefined'){const map=L.map(m.querySelector('#newPropertyMap')).setView([35,38],6);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);let marker;map.on('click',e=>{m.querySelector('[name=latitude]').value=e.latlng.lat.toFixed(7);m.querySelector('[name=longitude]').value=e.latlng.lng.toFixed(7);if(marker)marker.setLatLng(e.latlng);else marker=L.marker(e.latlng).addTo(map);});}m.querySelector('#property').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));const r=await fetch(`${API}/properties`,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(data)});const j=await r.json();if(!r.ok){showToast(j.error);return}m.remove();await loadProperties();showToast('تم حفظ العقار بنجاح')}}
-document.getElementById('addBtn').onclick=()=>currentUser?openProperty():openAuth();
+function openProperty(fromDashboard=false) {
+  const existing = document.getElementById('propertyModal');
+  if (existing?.classList.contains('open')) { existing.querySelector('.modalbox').focus(); return existing; }
+  const m = modalHtml('propertyModal', '<h2>أضف عقارك</h2><p>أرفق الصور والفيديو، ثم أكمل بيانات الإعلان.</p>', `
+    <form id="property" class="edit-form">
+      <section id="propertyAttachments" class="property-attachments full" aria-label="صور وفيديو الإعلان"></section>
+      <input name="title" required placeholder="عنوان الإعلان">
+      <select name="type" required aria-label="نوع العقار"><option value="">نوع العقار</option><option>شقة</option><option>منزل</option><option>فيلا</option><option>أرض</option><option>محل تجاري</option><option>مكتب</option><option>بناء</option><option>مزرعة</option></select>
+      <select name="mode" aria-label="نوع العملية"><option>بيع</option><option>إيجار</option></select>
+      <input name="city" required placeholder="المدينة"><input name="district" placeholder="المنطقة">
+      <input name="price" required type="number" min="0" placeholder="السعر">
+      <label>عملة السعر<select name="currency">${['USD','SYP','SAR','EUR','AED','GBP','KWD','QAR','CAD','AUD','JPY','CHF','SGD'].map(currency => `<option>${currency}</option>`).join('')}</select></label>
+      <input name="area" type="number" min="0" placeholder="المساحة م²">
+      <input name="rooms" type="number" min="0" placeholder="غرف النوم"><input name="baths" type="number" min="0" placeholder="دورات المياه">
+      <textarea class="full" name="description" placeholder="وصف العقار"></textarea>
+      <details class="property-location full"><summary>تحديد موقع العقار على الخريطة (اختياري)</summary>
+        <div id="newPropertyMap" class="location-picker"></div>
+        <div class="location-fields"><input name="latitude" placeholder="خط العرض"><input name="longitude" placeholder="خط الطول"></div>
+        <small>اضغط على الخريطة لتحديد الموقع، أو اتركه فارغًا.</small>
+      </details>
+      <p id="propertySaveStatus" class="property-save-status full" role="status" aria-live="polite">${currentUser ? 'سيتم نشر الإعلان باسم حسابك.' : 'يمكنك تجهيز الإعلان الآن. يلزم تسجيل الدخول لحفظه.'}</p>
+      <progress id="propertyUploadProgress" class="full" max="100" value="0" hidden aria-label="تقدم رفع الملف"></progress>
+      <button id="saveProperty" type="submit" class="primary full">حفظ الإعلان ورفع المرفقات</button>
+      <button id="finishProperty" type="button" class="media-finish full" hidden>متابعة بالإعلان المحفوظ</button>
+    </form>`);
+  const form = m.querySelector('#property');
+  const media = PropertyMedia.create(m.querySelector('#propertyAttachments'));
+  const status = m.querySelector('#propertySaveStatus');
+  const progress = m.querySelector('#propertyUploadProgress');
+  const save = m.querySelector('#saveProperty');
+  const finishButton = m.querySelector('#finishProperty');
+  let propertyId = null, busy = false, propertyMap = null;
+  const locationPanel = m.querySelector('.property-location');
+  locationPanel.addEventListener('toggle', () => {
+    if (!locationPanel.open || typeof L === 'undefined') return;
+    if (!propertyMap) {
+      propertyMap = L.map(m.querySelector('#newPropertyMap')).setView([35,38],6);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(propertyMap);
+      let marker;
+      propertyMap.on('click', event => {
+        if (busy || propertyId) return;
+        form.elements.latitude.value = event.latlng.lat.toFixed(7);
+        form.elements.longitude.value = event.latlng.lng.toFixed(7);
+        if (marker) marker.setLatLng(event.latlng); else marker = L.marker(event.latlng).addTo(propertyMap);
+      });
+    }
+    propertyMap.invalidateSize();
+  });
+  const cleanup = () => { media.destroy(); if (propertyMap) { propertyMap.remove(); propertyMap = null; } };
+  const close = () => {
+    if (busy) { status.textContent = 'جارٍ الحفظ والرفع، انتظر حتى تكتمل العملية.'; return; }
+    cleanup(); m.remove();
+    if (fromDashboard) document.getElementById('dashboardModal')?.classList.add('open');
+  };
+  m.querySelector('.modalclose').onclick = close;
+  m.onclick = event => { if (event.target === m) close(); };
+  const modalKeys = m.onkeydown;
+  m.onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); close(); } else modalKeys(event); };
+  async function finish(message) {
+    cleanup(); m.remove();
+    showToast(message);
+    try { if (fromDashboard) dashboardModal(await dashboardData()); else await loadProperties(); }
+    catch (_) { showToast(message + ' — حدّث الصفحة لعرضه.'); }
+  }
+  finishButton.onclick = () => finish('تم حفظ الإعلان بالمرفقات التي اكتمل رفعها. يمكنك إضافة البقية من «الصور والفيديو».');
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (busy) return;
+    if (!currentUser) { status.textContent = 'سجّل الدخول، ثم اضغط حفظ الإعلان. ستبقى بياناتك ومرفقاتك هنا.'; openAuth(); return; }
+    const payload = Object.fromEntries(new FormData(form));
+    busy = true; finishButton.hidden = true; save.disabled = true; save.textContent = 'جارٍ الحفظ...';
+    status.classList.remove('media-error');
+    form.querySelectorAll('input,select,textarea').forEach(input => input.disabled = true);
+    try {
+      if (!propertyId) {
+        status.textContent = 'جارٍ حفظ بيانات الإعلان...';
+        const response = await fetch(`${API}/properties`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify(payload) });
+        const result = await response.json();
+        if (!response.ok) throw Error(result.error || 'تعذر حفظ الإعلان. أعد المحاولة.');
+        propertyId = result.data.id;
+        media.lock();
+      }
+      progress.hidden = !media.count;
+      const remaining = await media.upload(propertyId, (item, percent) => {
+        progress.value = percent;
+        status.textContent = `رفع ${item.file.name}: ${percent}%`;
+      });
+      if (remaining.length) {
+        status.classList.add('media-error');
+        status.textContent = `تم حفظ الإعلان، وتعذر رفع ${remaining.length} من المرفقات. اضغط إعادة الرفع للمحاولة مجددًا.`;
+        save.textContent = 'إعادة رفع الملفات المتبقية';
+        finishButton.hidden = false;
+      } else {
+        await finish(media.count ? 'تم حفظ الإعلان ورفع الصور والفيديو بنجاح.' : 'تم حفظ الإعلان بنجاح.');
+      }
+    } catch (error) {
+      status.classList.add('media-error');
+      status.textContent = error.message || 'تعذر الاتصال. أعد المحاولة.';
+      save.textContent = propertyId ? 'إعادة رفع الملفات المتبقية' : 'حفظ الإعلان ورفع المرفقات';
+      if (propertyId) finishButton.hidden = false;
+    } finally {
+      busy = false; save.disabled = false; progress.hidden = true;
+      if (!propertyId) form.querySelectorAll('input,select,textarea').forEach(input => input.disabled = false);
+    }
+  };
+  return m;
+}
+document.getElementById('addBtn').onclick=()=>openProperty();
+document.querySelectorAll('a[href="#add"]').forEach(link=>link.addEventListener('click',event=>{event.preventDefault();openProperty();}));
+window.addEventListener('load',()=>{if(location.hash==='#add')openProperty();});
 
 // ==================== Owner / Agent Dashboard ====================
 async function dashboardData(){const r=await fetch(`${API}/me/dashboard`,{credentials:'same-origin'});if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'تعذر تحميل لوحة التحكم');}return r.json()}
@@ -170,15 +278,6 @@ function openImagesManager(p,parent){
   m.querySelectorAll('[data-delimg]').forEach(b=>b.onclick=async()=>{const r=await fetch(`${API}/me/properties/${p.id}/images/${b.dataset.delimg}`,{method:'DELETE',credentials:'same-origin'});if(r.ok){m.remove();parent?.remove();dashboardModal(await dashboardData());showToast('تم حذف الصورة')}});
   m.querySelector('#addExternalVideo').onclick=async()=>{const url=m.querySelector('#externalVideoUrl').value.trim();const title=m.querySelector('#externalVideoTitle').value.trim();if(!url)return showToast('أدخل رابط الفيديو');const r=await fetch(`${API}/me/properties/${p.id}/external-videos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,title}),credentials:'same-origin'});const j=await r.json();if(!r.ok)return showToast(j.error||'تعذر إضافة الرابط');m.remove();parent?.remove();dashboardModal(await dashboardData());showToast('تمت إضافة رابط الفيديو')};m.querySelectorAll('[data-primaryvideo]').forEach(b=>b.onclick=async()=>{const r=await fetch(`${API}/me/properties/${p.id}/videos/${b.dataset.primaryvideo}/primary`,{method:'PATCH',credentials:'same-origin'});if(r.ok){m.remove();parent?.remove();dashboardModal(await dashboardData());showToast('تم تعيين الفيديو الرئيسي')}});m.querySelectorAll('[data-delvideo]').forEach(b=>b.onclick=async()=>{const r=await fetch(`${API}/me/properties/${p.id}/videos/${b.dataset.delvideo}`,{method:'DELETE',credentials:'same-origin'});if(r.ok){m.remove();parent?.remove();dashboardModal(await dashboardData());showToast('تم حذف الفيديو')}});
 }
-
-// Upgrade the property form: after creation, return to the dashboard and offer image upload.
-const originalOpenProperty = openProperty;
-openProperty = function(fromDashboard=false){
-  const m=modalHtml('propertyModal','<h2>أضف عقارك</h2><p>سيتم نشر العقار باسم حسابك.</p>','<form id="property" class="edit-form"><input name="title" required placeholder="عنوان الإعلان"><select name="type" required><option value="">نوع العقار</option><option>شقة</option><option>منزل</option><option>فيلا</option><option>أرض</option><option>محل تجاري</option><option>مكتب</option><option>بناء</option><option>مزرعة</option></select><select name="mode"><option>بيع</option><option>إيجار</option></select><input name="city" required placeholder="المدينة"><input name="district" placeholder="المنطقة"><input name="price" required type="number" placeholder="السعر"><label>عملة السعر<select name="currency"><option >USD</option><option >SYP</option><option >SAR</option><option >EUR</option><option >AED</option><option >GBP</option><option >KWD</option><option >QAR</option><option >CAD</option><option >AUD</option><option >JPY</option><option >CHF</option><option >SGD</option></select></label><input name="area" type="number" placeholder="المساحة م²"><input name="rooms" type="number" placeholder="غرف النوم"><input name="baths" type="number" placeholder="دورات المياه"><textarea name="description" placeholder="وصف العقار"></textarea><div class="full"><b>حدد موقع العقار</b><div id="newPropertyMap" class="location-picker"></div><div class="location-fields"><input id="newLat" name="latitude" placeholder="خط العرض"><input id="newLng" name="longitude" placeholder="خط الطول"></div><small>تحديد الموقع يساعد العملاء على العثور على عقارك عند البحث بالخريطة.</small></div><button class="primary full">حفظ الإعلان</button></form>');
-  if(typeof L!=='undefined'){const nm=m.querySelector('#newPropertyMap');const nmap=L.map(nm).setView([33.5138,36.2765],6);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(nmap);let nmarker=null;nmap.on('click',e=>{m.querySelector('#newLat').value=e.latlng.lat.toFixed(7);m.querySelector('#newLng').value=e.latlng.lng.toFixed(7);if(nmarker)nmarker.setLatLng(e.latlng);else nmarker=L.marker(e.latlng).addTo(nmap);});setTimeout(()=>nmap.invalidateSize(),100);}
-  if(typeof L!=='undefined'){const map=L.map(m.querySelector('#newPropertyMap')).setView([35,38],6);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);let marker;map.on('click',e=>{m.querySelector('[name=latitude]').value=e.latlng.lat.toFixed(7);m.querySelector('[name=longitude]').value=e.latlng.lng.toFixed(7);if(marker)marker.setLatLng(e.latlng);else marker=L.marker(e.latlng).addTo(map);});}m.querySelector('#property').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));const r=await fetch(`${API}/properties`,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(data)});const j=await r.json();if(!r.ok)return showToast(j.error);m.remove();showToast('تم إنشاء العقار — يمكنك الآن إضافة الصور');if(fromDashboard){dashboardModal(await dashboardData());}else await loadProperties();const fresh=(await dashboardData()).properties.find(x=>String(x.id)===String(j.data.id));if(fresh){const dash=document.getElementById('dashboardModal');openImagesManager(fresh,dash)}};
-  return m;
-};
 
 window.addEventListener('load',()=>initGeoMap());
 
