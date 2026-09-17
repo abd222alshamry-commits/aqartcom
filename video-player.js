@@ -18,7 +18,9 @@
       const id = match?.[1] || (/^\/watch\/?$/.test(url.pathname) ? url.searchParams.get('v') : '');
       if (/^\d+$/.test(id || '')) {
         const source = match ? `https://www.facebook.com${url.pathname}` : `https://www.facebook.com/watch/?v=${id}`;
-        return {type:'facebook', url:source, embed:`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(source)}&show_text=false&autoplay=true&mute=false&allowfullscreen=true`};
+        // Facebook starts autoplay embeds muted even when mute=false. Let the
+        // viewer press Facebook's play control so playback can begin with sound.
+        return {type:'facebook', url:source, embed:`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(source)}&show_text=false&autoplay=false&mute=false&allowfullscreen=true`};
       }
     }
     return {type:/\.(mp4|webm|mov|m4v|ogv)$/i.test(url.pathname) ? 'file' : 'external', url:url.href};
@@ -155,7 +157,9 @@
         if (window.ResizeObserver) { frameObserver = new ResizeObserver(fitFrame); frameObserver.observe(stage); }
         window.addEventListener('resize', fitFrame);
       }
-      tools.textContent = 'إذا لم يتوفر الفيديو هنا، افتحه من المصدر.';
+      tools.textContent = source.type === 'facebook'
+        ? 'اضغط ▶ داخل الفيديو للتشغيل بالصوت. إن كان مكتومًا، اضغط رمز السماعة.'
+        : 'إذا لم يتوفر الفيديو هنا، افتحه من المصدر.';
       requestFullscreen();
     } else {
       stage.innerHTML = '<p class="video-viewer-message">هذا المصدر لا يدعم التشغيل داخل الموقع. استخدم رابط الفيديو الأصلي.</p>';

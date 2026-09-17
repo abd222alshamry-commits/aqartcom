@@ -17,7 +17,7 @@ test('YouTube watch, short, and embed URLs use the same safe video identifier', 
     assert.equal(new URL(video.embed).searchParams.get('autoplay'), '1');
   }
 });
-test('Facebook video embeds preserve video identity without tracking parameters', () => {
+test('Facebook embeds preserve video identity and wait for a play gesture to avoid autoplay muting', () => {
   for (const url of ['https://www.facebook.com/100079461761425/videos/27922983067403817/?__cft__[0]=tracking', 'https://m.facebook.com/reel/27922983067403817/', 'https://facebook.com/watch/?v=27922983067403817&tracking=1']) {
     const video = resolveVideo(url), embed = new URL(video.embed);
     assert.equal(video.type, 'facebook');
@@ -25,6 +25,7 @@ test('Facebook video embeds preserve video identity without tracking parameters'
     assert.match(embed.searchParams.get('href'), /27922983067403817/);
     assert.doesNotMatch(embed.searchParams.get('href'), /tracking|__cft__/);
     assert.equal(embed.searchParams.get('mute'), 'false');
+    assert.equal(embed.searchParams.get('autoplay'), 'false');
   }
 });
 test('untrusted schemes and credentials cannot enter the player', () => {
