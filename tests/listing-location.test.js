@@ -98,7 +98,7 @@ test('map groups shared approximate centers without hiding listings and keeps of
   const circles=[],pins=[],nodes={'#summary':{},'#results':{}};
   const L={divIcon:options=>options,circle:(point,options)=>({addTo(){circles.push({point,options});}}),marker:(point,options)=>({addTo(){pins.push({point,options});return this;},bindPopup(html){pins.at(-1).popup=html;}})};
   const basic={source_kind:'office',latitude:34.876333,longitude:36.253671,city:'طرطوس',location_accuracy:'locality',location_label:'مشتى الحلو',location_radius_m:5000,location_approximate:true,price:null};
-  const context={L,markers:{clearLayers(){}},properties:[{...basic,id:'market-7',market_id:7,title:'أول <script>'},{...basic,id:'market-8',market_id:8,title:'ثانٍ'},{id:9,title:'مباشر',latitude:35,longitude:36,price:100,currency:'USD'}],esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),$:selector=>nodes[selector],updateCompare(){}};
+  const context={L,map:{latLngToLayerPoint:point=>({x:point[1]*10000,y:point[0]*10000})},markers:{clearLayers(){}},properties:[{...basic,id:'market-7',market_id:7,title:'أول <script>'},{...basic,id:'market-8',market_id:8,title:'ثانٍ'},{id:9,title:'مباشر',latitude:35,longitude:36,price:100,currency:'USD'}],esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),$:selector=>nodes[selector],updateCompare(){}};
   vm.runInNewContext(fragment+'\nrender();',context);
   assert.equal(circles.length,1);assert.equal(circles[0].options.radius,5000);assert.equal(pins.length,2);
   assert.match(pins[0].options.icon.html,/2 إعلان/);
@@ -107,6 +107,26 @@ test('map groups shared approximate centers without hiding listings and keeps of
   assert.ok(!pins[0].popup.includes('<script>'));assert.ok(pins[0].popup.includes('&lt;script&gt;'));
   assert.match(nodes['#results'].innerHTML,/compare\(9\)/);assert.ok(!nodes['#results'].innerHTML.includes('compare(NaN)'));
   assert.match(nodes['#summary'].innerHTML,/100 USD/);assert.match(nodes['#results'].innerHTML,/السعر عند التواصل/);
+});
+
+test('nearby marker labels cluster in pixel space and separate on zoom without inventing a combined location circle',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../map-search.js'),'utf8');
+  const fragment=source.slice(source.indexOf('function price(p)'),source.indexOf('function compare(id)'));
+  const pins=[],circles=[];let scale=1000;
+  const basic={source_kind:'office',location_approximate:true,location_accuracy:'locality',location_radius_m:5000,price:null};
+  const properties=[{...basic,id:'market-1',market_id:1,title:'أول',latitude:34.87,longitude:36.25,location_label:'مشتى الحلو'},
+    {...basic,id:'market-2',market_id:2,title:'ثانٍ',latitude:34.87,longitude:36.25,location_label:'مشتى الحلو'},
+    {...basic,id:'market-3',market_id:3,title:'ثالث',latitude:34.88,longitude:36.27,location_label:'حفة الموارنة'}];
+  const context={properties,esc:value=>String(value??''),map:{latLngToLayerPoint:point=>({x:point[1]*scale,y:point[0]*scale})},markers:{clearLayers(){pins.length=0;circles.length=0;}},L:{divIcon:options=>options,circle:(point,options)=>({addTo(){circles.push({point,options});}}),marker:(point,options)=>({addTo(){pins.push({point,options});return this;},bindPopup(html){pins.at(-1).popup=html;}})}};
+  vm.createContext(context);vm.runInContext(fragment,context);context.renderMapMarkers();
+  assert.equal(pins.length,1);assert.equal(circles.length,0);assert.match(pins[0].options.icon.html,/3 إعلان/);
+  assert.match(pins[0].popup,/مجموعة مواقع متقاربة/);assert.match(pins[0].popup,/مشتى الحلو/);assert.match(pins[0].popup,/حفة الموارنة/);
+  for(const id of [1,2,3])assert.ok(pins[0].popup.includes('office-property.html?id='+id));
+  assert.deepEqual(Array.from(pins[0].point),[34.87,36.25],'cluster anchors to an existing center, never averaged coordinates');
+  scale=100000;context.renderMapMarkers();
+  assert.equal(pins.length,2);assert.equal(circles.length,2);assert.match(pins[0].options.icon.html,/2 إعلان/);
+  assert.ok(!pins[0].popup.includes('حفة الموارنة'));assert.ok(pins[1].popup.includes('حفة الموارنة'));
+  assert.match(source,/map\.on\('zoomend',renderMapMarkers\)/);
 });
 
 test('owner detail distinguishes supplied points from approximate locality circles and has no map for unknown areas',()=>{

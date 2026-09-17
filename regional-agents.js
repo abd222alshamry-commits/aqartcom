@@ -19,12 +19,12 @@ function controls(){
   if(!state)return;
   const enabled=Boolean(state.settings.enabled),ready=Boolean(state.configured&&state.verified);
   el('verifyConnection').disabled=busy||!state.configured;
-  el('toggleSchedule').disabled=busy||(!enabled&&!ready);
+  el('toggleSchedule').disabled=busy||(!enabled&&(!ready||dirty));
   el('toggleSchedule').textContent=enabled?'إيقاف الجدول':'تفعيل الجدول';
   el('settingsFields').disabled=busy;
   el('refreshStatus').disabled=busy;
   const pending=count('pending')+count('running'),dailyLimit=Number(state.calls_today)>=Number(state.settings.calls_per_day);
-  el('runNow').disabled=busy||!enabled||!ready||pending>0||dailyLimit;
+  el('runNow').disabled=busy||dirty||!enabled||!ready||pending>0||dailyLimit;
   el('runHint').textContent=!ready?'اختبر اتصال Astra بنجاح قبل تشغيل البحث.':!enabled?'فعّل الجدول لبدء البحث المجدول أو اليدوي.':dailyLimit?'اكتمل حد البحث اليومي؛ تُستكمل المهام بعد بدء اليوم التالي بتوقيت سوريا.':pending>0?'هناك '+number(pending)+' مهمة قيد التنفيذ أو الانتظار.':'تستخدم الجولة اليدوية حدود الجولة واليوم نفسها.';
 }
 function render(){
@@ -38,7 +38,7 @@ function render(){
   el('scheduleState').textContent=s.enabled?'مفعّل':'متوقف';el('scheduleState').className=s.enabled?'state-on':'state-off';
   el('setupNote').hidden=state.configured;el('pauseReason').hidden=!s.pause_reason;el('pauseReason').textContent=s.pause_reason||'';
   el('verifiedAt').textContent=state.verified&&s.verified_at?'آخر اختبار ناجح: '+date(s.verified_at)+' بتوقيت سوريا.':'';
-  el('activationNote').textContent=state.verified?'تم التحقق من الوصول إلى Astra. يعرض السجل أدناه نتائج البحث الفعلية وأخطاءه.':'يتطلب تفعيل الجدول مفتاحًا مضبوطًا واختبار اتصال ناجحًا.';
+  el('activationNote').textContent=dirty?'احفظ حدود البحث المعدلة قبل التفعيل أو بدء جولة جديدة.':state.verified?'تم التحقق من الوصول إلى Astra. يعرض السجل أدناه نتائج البحث الفعلية وأخطاءه.':'يتطلب تفعيل الجدول مفتاحًا مضبوطًا واختبار اتصال ناجحًا.';
   el('nextRun').textContent=(s.enabled?'الموعد المجدول التالي: ':'أقرب موعد متاح بعد التفعيل: ')+date(state.next_run)+' بتوقيت سوريا.';
   if(!dirty){el('callsPerCycle').value=s.calls_per_cycle;el('callsPerDay').value=s.calls_per_day;el('autoPublish').checked=Boolean(s.auto_publish);}
   el('dailyUsage').textContent='طلبات اليوم: '+number(state.calls_today)+' من '+number(s.calls_per_day);
@@ -75,7 +75,7 @@ async function targets(page=1){
   }catch(error){if(serial!==targetSerial)return;el('targetStatus').textContent=error.message;el('targetList').innerHTML='';el('targetPage').textContent='';targetPages=1;targetPage=1;}
   finally{if(serial===targetSerial){targetBusy=false;el('searchTargets').disabled=false;el('previousTargets').disabled=targetPage<=1;el('nextTargets').disabled=targetPage>=targetPages;}}
 }
-el('settingsForm').oninput=()=>{dirty=true;};
+el('settingsForm').oninput=()=>{dirty=true;el('activationNote').textContent='احفظ حدود البحث المعدلة قبل التفعيل أو بدء جولة جديدة.';controls();};
 el('settingsForm').onsubmit=event=>{
   event.preventDefault();if(busy||!state)return;
   const cycle=Number(el('callsPerCycle').value),daily=Number(el('callsPerDay').value);

@@ -8,7 +8,23 @@ async function search(){const body={...filters(),polygon:mode==='polygon'&&drawP
 function price(p){return p.price==null?'السعر عند التواصل':Number(p.price).toLocaleString('en-US')+' '+esc(p.currency||'USD')}
 function detailUrl(p){return p.source_kind==='office'?'/office-property.html?id='+encodeURIComponent(p.market_id):'/property.html?id='+encodeURIComponent(p.id)}
 function locationWarning(p){return p.location_approximate?'موقع تقريبي — ليس موقع العقار الدقيق':''}
-function render(){
+function nearbyMapGroups(groups){
+ const entries=[...groups.values()].map(rows=>({rows,point:map.latLngToLayerPoint([Number(rows[0].latitude),Number(rows[0].longitude)])}));
+ const parent=entries.map((_,i)=>i),cells=new Map(),distance=120;
+ const root=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
+ entries.forEach((entry,i)=>{
+  const x=Math.floor(entry.point.x/distance),y=Math.floor(entry.point.y/distance);
+  for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(const j of cells.get((x+dx)+','+(y+dy))||[]){
+   const other=entries[j].point;
+   if(Math.hypot(entry.point.x-other.x,entry.point.y-other.y)<distance)parent[root(i)]=root(j);
+  }
+  const key=x+','+y;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(i);
+ });
+ const clusters=new Map();
+ entries.forEach((entry,i)=>{const key=root(i);if(!clusters.has(key))clusters.set(key,[]);clusters.get(key).push(entry.rows);});
+ return [...clusters.values()];
+}
+function renderMapMarkers(){
  markers.clearLayers();
  const groups=new Map();
  for(const p of properties){
@@ -16,15 +32,21 @@ function render(){
   const key=[Number(p.latitude),Number(p.longitude),p.location_accuracy||'specified'].join(':');
   if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);
  }
- for(const group of groups.values()){
-  const p=group[0],point=[Number(p.latitude),Number(p.longitude)],approx=p.location_approximate;
+ for(const centers of nearbyMapGroups(groups)){
+  const group=centers.flat(),p=group[0],point=[Number(p.latitude),Number(p.longitude)],multiple=centers.length>1,approx=group.some(row=>row.location_approximate);
   const label=group.length>1?group.length+' إعلان':price(p);
   const icon=L.divIcon({className:'',html:`<div class="price-pin${approx?' approximate-pin':''}">${approx?'<span aria-hidden="true">≈ </span>':''}${label}</div>`,iconSize:[100,30],iconAnchor:[50,15]});
-  if(approx)L.circle(point,{radius:Math.max(1000,Math.min(400000,Number(p.location_radius_m)||5000)),color:'#b77912',fillColor:'#eab54a',fillOpacity:.08,dashArray:'6 5',weight:2,interactive:false}).addTo(markers);
-  const warning=approx?`<p class="map-location-warning">${locationWarning(p)}</p><p>${esc(p.location_label)}${p.location_accuracy==='governorate'?' — اسم المحافظة فقط':''}</p>`:'';
-  const popup=`<div class="map-listing-popup" dir="rtl">${warning}${group.map(row=>`<article><b>${esc(row.title)}</b><br>${esc(row.city)}${row.district?' — '+esc(row.district):''}<br><a href="${detailUrl(row)}">عرض الإعلان · ${price(row)}</a></article>`).join('')}</div>`;
-  L.marker(point,{icon,title:approx?locationWarning(p):p.title}).addTo(markers).bindPopup(popup,{maxWidth:300});
+  // A cluster is anchored to an existing center for display only. Never draw a
+  // fictitious town-radius circle around a combined or averaged location.
+  if(approx&&!multiple)L.circle(point,{radius:Math.max(1000,Math.min(400000,Number(p.location_radius_m)||5000)),color:'#b77912',fillColor:'#eab54a',fillOpacity:.08,dashArray:'6 5',weight:2,interactive:false}).addTo(markers);
+  const clusterLabel='مجموعة مواقع متقاربة — العلامة لتجميع النتائج وليست موقع عقار';
+  const warning=multiple?`<p class="map-location-warning">${clusterLabel}</p><p>كبّر الخريطة لفصل المواقع، أو اختر الإعلان من القائمة.</p>`:approx?`<p class="map-location-warning">${locationWarning(p)}</p><p>${esc(p.location_label)}${p.location_accuracy==='governorate'?' — اسم المحافظة فقط':''}</p>`:'';
+  const popup=`<div class="map-listing-popup" dir="rtl">${warning}${group.map(row=>`<article><b>${esc(row.title)}</b><br>${esc(row.location_label||row.city)}${row.district?' — '+esc(row.district):''}${row.location_approximate?`<br><span class="map-location-warning">${locationWarning(row)}</span>`:''}<br><a href="${detailUrl(row)}">عرض الإعلان · ${price(row)}</a></article>`).join('')}</div>`;
+  L.marker(point,{icon,title:multiple?clusterLabel:approx?locationWarning(p):p.title}).addTo(markers).bindPopup(popup,{maxWidth:300});
  }
+}
+function render(){
+ renderMapMarkers();
  const averages={};
  for(const p of properties){if(p.price==null||!Number.isFinite(Number(p.price)))continue;const c=p.currency||'USD';(averages[c]??=[]).push(Number(p.price));}
  const av=Object.entries(averages).map(([c,a])=>`${Math.round(a.reduce((sum,x)=>sum+x,0)/a.length).toLocaleString('en-US')} ${c}`).join(' · ');
@@ -40,3 +62,5 @@ $('#searchBounds').onclick=search;['mode','type','rooms'].forEach(id=>$('#'+id).
 function resetArea(next='bounds') {mode=next;drawPoints=[];if(polygonLayer){map.removeLayer(polygonLayer);polygonLayer=null;}if(circleLayer){map.removeLayer(circleLayer);circleLayer=null;}$('#draw').classList.remove('active');$('#circle').classList.remove('active');$('#finish').disabled=true;}
 $('#resetArea').onclick=()=>{resetArea();search();};
 $('#closeFilters').onclick=()=>$('.filters').classList.remove('open');
+
+map.on('zoomend',renderMapMarkers);
