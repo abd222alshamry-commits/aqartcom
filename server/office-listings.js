@@ -1,7 +1,10 @@
 'use strict';
 
 const data = require('./office-listings-data.json');
+const {withApproximateLocation}=require('./listing-location');
 const enabledBatch = '2026-09-16-marei-public-references';
+const regionalBatch = 'regional-astra-v1';
+const publishedBatches = Object.freeze([data.snapshot, regionalBatch]);
 
 // Relative Facebook dates are anchored to the review, never to today's date.
 // This value is only an ordering key; it is not presented as an exact post time.
@@ -13,7 +16,8 @@ function publicationTime(item) {
   if (!relative) return 0;
   const amount = relative[1] ? Number(relative[1]) : /ين$/.test(relative[2]) ? 2 : 1;
   const unit = relative[2].startsWith('سا') ? 3600000 : 86400000;
-  return Date.parse(data.observedAt) - amount * unit;
+  const observed = Date.parse(item.observed_at || data.observedAt);
+  return Number.isFinite(observed) ? observed - amount * unit : 0;
 }
 
 async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BATCH) {
@@ -58,19 +62,29 @@ async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BAT
   finally { client.release(); }
 }
 
+const publicColumns = `m.id,m.platform,m.title,m.description,m.external_url,m.advertiser_name,
+  m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.media,
+  m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
+  m.raw_data->>'source_published_at' AS source_published_at,m.raw_data->>'published_label' AS published_label,
+  m.raw_data->>'observed_at' AS observed_at,m.raw_data->>'availability' AS availability,
+  m.raw_data->>'video_duration' AS video_duration,m.raw_data->>'governorate_id' AS governorate_id,
+  m.raw_data->>'locality_id' AS locality_id,
+  COALESCE(m.raw_data->>'media_kind',CASE WHEN m.raw_data->>'import_batch'=$1 THEN 'video' ELSE 'none' END) AS media_kind,
+  m.raw_data->'local_video' AS hosted_video`;
+const publishedWhere = "m.status='published' AND m.raw_data->>'import_batch'=ANY($2::text[])";
+
 async function readOfficeListings(pool,officeKey) {
-      const result = await pool.query(`SELECT m.id,m.title,m.description,m.external_url,m.advertiser_name,
-        m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.media,
-        m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
-        m.raw_data->>'source_published_at' AS source_published_at,m.raw_data->>'published_label' AS published_label,
-        m.raw_data->>'availability' AS availability,m.raw_data->>'video_duration' AS video_duration,
-        m.raw_data->'local_video' AS hosted_video
-        FROM market_listings m
-        WHERE m.status='published' AND m.raw_data->>'import_batch'=$1
-          AND ($2::text IS NULL OR m.raw_data->>'office_key'=$2)
-        ORDER BY m.raw_data->>'office_key',(m.raw_data->>'curation_rank')::int,m.id
-        LIMIT 25`,[data.snapshot,officeKey||null]);
-  return result.rows.sort((a,b)=>publicationTime(b)-publicationTime(a));
+  const result = await pool.query(`SELECT ${publicColumns} FROM market_listings m
+    WHERE ${publishedWhere} AND ($3::text IS NULL OR m.raw_data->>'office_key'=$3)
+    ORDER BY m.id DESC`,[data.snapshot,publishedBatches,officeKey||null]);
+  return result.rows.map(withApproximateLocation).sort((a,b)=>publicationTime(b)-publicationTime(a) || Number(b.id)-Number(a.id));
+}
+
+async function readOfficeListing(pool,id) {
+  if (!/^\d+$/.test(String(id || ''))) return null;
+  const result = await pool.query(`SELECT ${publicColumns} FROM market_listings m
+    WHERE ${publishedWhere} AND m.id=$3::bigint`,[data.snapshot,publishedBatches,String(id)]);
+  return result.rows[0] ? withApproximateLocation(result.rows[0]) : null;
 }
 
 function registerOfficeListings(app,pool) {
@@ -78,7 +92,8 @@ function registerOfficeListings(app,pool) {
     try {
       const rows = await readOfficeListings(pool,officeKey);
       res.set('Cache-Control','no-store');
-      res.json({data:rows,offices:data.offices,observed_at:data.observedAt,
+      const observedAt=rows.reduce((latest,row)=>Date.parse(row.observed_at)>(Date.parse(latest)||0)?row.observed_at:latest,null);
+      res.json({data:rows,offices:data.offices,observed_at:observedAt,
         availability:'unconfirmed',source_name:officeKey==='marei'?'مكتب مرعي العقاري':undefined});
     } catch (error) { console.error('Public office listings:',error.message);res.status(500).json({error:'تعذر تحميل إعلانات المكاتب'}); }
   }
@@ -86,12 +101,12 @@ function registerOfficeListings(app,pool) {
   app.get('/api/market/listings/:id',async(req,res)=>{
     try {
       if(!/^\d+$/.test(req.params.id))return res.status(404).json({error:'الإعلان غير موجود'});
-      const item=(await readOfficeListings(pool)).find(x=>String(x.id)===req.params.id);
+      const item=await readOfficeListing(pool,req.params.id);
       if(!item)return res.status(404).json({error:'الإعلان غير موجود أو أُخفي'});
-      res.set('Cache-Control','no-store');res.json({data:item,observed_at:data.observedAt});
+      res.set('Cache-Control','no-store');res.json({data:item,observed_at:item.observed_at||null});
     } catch(error){res.status(500).json({error:'تعذر تحميل الإعلان'});}
   });
   app.get('/api/market/marei',(req,res)=>respond(req,res,'marei'));
 }
 
-module.exports={data,enabledBatch,seedOfficeListings,registerOfficeListings,readOfficeListings,publicationTime};
+module.exports={data,enabledBatch,regionalBatch,publishedBatches,seedOfficeListings,registerOfficeListings,readOfficeListings,readOfficeListing,publicationTime};

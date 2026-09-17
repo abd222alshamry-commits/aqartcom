@@ -399,17 +399,19 @@ function pointInPolygon(lat,lng,poly){
 function haversineKm(a,b,c,d){const R=6371,toRad=x=>Number(x)*Math.PI/180;const dLat=toRad(c-a),dLng=toRad(d-b);const q=Math.sin(dLat/2)**2+Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(Math.min(1,q)));}
 app.post('/api/properties/geo-search',async(req,res)=>{try{
   const b=req.body||{}, poly=Array.isArray(b.polygon)?b.polygon.slice(0,100):null, center=b.center||{}, radius=Math.min(200,Math.max(0,Number(b.radiusKm)||0));
-  const vals=[];const where=["p.status='active'","p.is_demo=FALSE","p.latitude IS NOT NULL","p.longitude IS NOT NULL"];
+  const vals=[];const where=["p.status='active'","p.is_demo=FALSE"];
   if(b.office||b.availability==='sold')where.push('FALSE');
   const add=(sql,v)=>{vals.push(v);where.push(sql.replace('?',`$${vals.length}`));};
   if(b.city)add('p.city=?',b.city);if(b.district)add('p.district=?',String(b.district).trim());if(b.type)add('p.type=?',b.type);if(b.mode)add('p.mode=?',b.mode);if(b.rooms&&b.rooms!=='5+')add('p.rooms=?',Number(b.rooms));if(b.rooms==='5+')where.push('p.rooms>=5');
   if(b.minPrice)add('p.price>=?',Number(b.minPrice));if(b.maxPrice)add('p.price<=?',Number(b.maxPrice));
   const r=await pool.query(`SELECT p.id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.image_url,p.featured,p.latitude,p.longitude,p.created_at FROM properties p WHERE ${where.join(' AND ')} ORDER BY p.featured DESC,p.created_at DESC LIMIT 500`,vals);
-  let data=r.rows.filter(x=>!poly||pointInPolygon(Number(x.latitude),Number(x.longitude),poly));
+  const imported=await require('./office-search').searchOfficeMapListings(pool,b,getFxRate);
+  const owned=r.rows.map(require('./listing-location').withFallbackLocation);
+  let data=[...owned,...imported].filter(x=>x.latitude!=null&&x.longitude!=null&&(!poly||pointInPolygon(Number(x.latitude),Number(x.longitude),poly)));
   if(Number.isFinite(Number(center.lat))&&Number.isFinite(Number(center.lng))&&radius)data=data.filter(x=>haversineKm(center.lat,center.lng,x.latitude,x.longitude)<=radius);
   const speed={drive:35,walk:4.5,bike:15}[b.commuteMode]||35, minutes=Math.max(0,Number(b.commuteMinutes)||0);
-  if(minutes&&Number.isFinite(Number(center.lat))&&Number.isFinite(Number(center.lng))){const maxKm=speed*minutes/60;data=data.filter(x=>haversineKm(center.lat,center.lng,x.latitude,x.longitude)<=maxKm).map(x=>({...x,commute_estimate_minutes:Math.round(haversineKm(center.lat,center.lng,x.latitude,x.longitude)/speed*60)}));}
-  res.json({data,count:data.length,approximate_commute:minutes>0});
+  if(minutes&&Number.isFinite(Number(center.lat))&&Number.isFinite(Number(center.lng))){const maxKm=speed*minutes/60;data=data.filter(x=>!x.location_approximate&&haversineKm(center.lat,center.lng,x.latitude,x.longitude)<=maxKm).map(x=>({...x,commute_estimate_minutes:Math.round(haversineKm(center.lat,center.lng,x.latitude,x.longitude)/speed*60)}));}
+  res.json({data,count:data.length,approximate_commute:minutes>0,approximate_locations:data.some(x=>x.location_approximate)});
 }catch(e){console.error(e);res.status(500).json({error:'تعذر تنفيذ البحث الجغرافي المتقدم'});}});
 app.get('/api/me/search-areas',requireAuth,async(req,res)=>{try{const r=await pool.query('SELECT * FROM property_search_areas WHERE user_id=$1 ORDER BY created_at DESC',[req.user.id]);res.json({data:r.rows});}catch(e){res.status(500).json({error:'تعذر تحميل مناطق البحث'});}});
 app.post('/api/me/search-areas',requireAuth,async(req,res)=>{try{const b=req.body||{};const r=await pool.query(`INSERT INTO property_search_areas(user_id,name,polygon,center_lat,center_lng,radius_km,commute_minutes,commute_mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,[req.user.id,String(b.name||'منطقة بحث').slice(0,160),JSON.stringify(b.polygon||null),b.center?.lat||null,b.center?.lng||null,b.radiusKm||null,b.commuteMinutes||null,b.commuteMode||null]);res.status(201).json({data:r.rows[0]});}catch(e){res.status(500).json({error:'تعذر حفظ منطقة البحث'});}});
@@ -1201,7 +1203,7 @@ app.post('/api/office/ads/:id/publish', requireOfficeMember, async(req,res)=>{
 });
 
 app.get('/api/properties/:id', async (req, res) => {
-  try { const result=await pool.query(`UPDATE properties SET views_count=views_count+1 WHERE id=$1 AND status='active' AND is_demo=FALSE RETURNING *`,[req.params.id]); if(!result.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const owner=await pool.query('SELECT id,name,phone,email,role,created_at FROM users WHERE id=$1',[result.rows[0].owner_id]); const imgs=await pool.query('SELECT id,url,sort_order FROM property_images WHERE property_id=$1 ORDER BY sort_order,id',[req.params.id]); const vids=await pool.query('SELECT id,url,title,source_type,is_primary FROM property_videos WHERE property_id=$1 ORDER BY is_primary DESC,created_at DESC',[req.params.id]); const ad=await pool.query(`SELECT id,placement,priority,title FROM office_ads WHERE property_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW()) ORDER BY priority DESC,budget DESC,created_at DESC LIMIT 1`,[req.params.id]); result.rows[0].images=imgs.rows; result.rows[0].videos=vids.rows; result.rows[0].owner=owner.rows[0]||null; result.rows[0].ad=ad.rows[0]||null; res.json({data:result.rows[0]}); }
+  try { const result=await pool.query(`UPDATE properties SET views_count=views_count+1 WHERE id=$1 AND status='active' AND is_demo=FALSE RETURNING *`,[req.params.id]); if(!result.rows[0]) return res.status(404).json({error:'العقار غير موجود'}); const owner=await pool.query('SELECT id,name,phone,email,role,created_at FROM users WHERE id=$1',[result.rows[0].owner_id]); const imgs=await pool.query('SELECT id,url,sort_order FROM property_images WHERE property_id=$1 ORDER BY sort_order,id',[req.params.id]); const vids=await pool.query('SELECT id,url,title,source_type,is_primary FROM property_videos WHERE property_id=$1 ORDER BY is_primary DESC,created_at DESC',[req.params.id]); const ad=await pool.query(`SELECT id,placement,priority,title FROM office_ads WHERE property_id=$1 AND status='active' AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW()) ORDER BY priority DESC,budget DESC,created_at DESC LIMIT 1`,[req.params.id]); result.rows[0].images=imgs.rows; result.rows[0].videos=vids.rows; result.rows[0].owner=owner.rows[0]||null; result.rows[0].ad=ad.rows[0]||null; res.json({data:require('./listing-location').withFallbackLocation(result.rows[0])}); }
   catch(error){res.status(500).json({error:'تعذر تحميل العقار'});}
 });
 
@@ -1424,8 +1426,9 @@ app.get('/api/admin/market/listings',requireAdmin,async(req,res)=>{try{const sta
 app.patch('/api/admin/market/listings/:id',requireAdmin,async(req,res)=>{try{const status=String(req.body.status||'');if(!['pending','approved','rejected','published','duplicate'].includes(status))return res.status(400).json({error:'حالة غير صحيحة'});const r=await pool.query('UPDATE market_listings SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING *',[status,req.params.id]);if(!r.rows[0])return res.status(404).json({error:'الإعلان غير موجود'});res.json({data:r.rows[0]});}catch(e){res.status(500).json({error:'تعذر تحديث الإعلان'});}});
 app.post('/api/admin/market/sync',requireAdmin,async(_req,res)=>{try{const x=await marketSync();res.json(x);}catch(e){res.status(500).json({error:e.message||'تعذر تشغيل المزامنة'});}});
 app.get('/api/admin/market/runs',requireAdmin,async(_req,res)=>{try{const r=await pool.query(`SELECT r.*,s.name source_name FROM market_ingestion_runs r LEFT JOIN market_sources s ON s.id=r.source_id ORDER BY r.started_at DESC LIMIT 100`);res.json({data:r.rows});}catch(e){res.status(500).json({error:'تعذر تحميل سجل المزامنة'});}});
-setTimeout(()=>marketSync().catch(e=>console.error('market sync:',e.message)),15000);
-setInterval(()=>marketSync().catch(e=>console.error('market sync:',e.message)),Math.max(1,Number(process.env.MARKET_SYNC_INTERVAL_HOURS||24))*3600000);
+// The regional scheduler owns automatic discovery at 18:00 and 23:00 Damascus.
+// Existing authorized Meta sources remain available through the manual sync route.
+await require('./regional-agents').register(app,{pool,requireAdmin});
 
 
 // ---------------- V27 hotel payments, collections and discrepancy detection ----------------

@@ -3,7 +3,7 @@ const fs = require('node:fs').promises;
 const path = require('node:path');
 const crypto = require('node:crypto');
 const multer = require('multer');
-const {readOfficeListings,data} = require('./office-listings');
+const {readOfficeListings,publishedBatches} = require('./office-listings');
 const {MAX_BYTES,downloadVideo,prepareVideo} = require('./office-video-store');
 const reserve = 128 * 1024 * 1024;
 module.exports = function registerOfficeVideos(app,{pool,requireAdmin,uploadDir}) {
@@ -27,7 +27,7 @@ module.exports = function registerOfficeVideos(app,{pool,requireAdmin,uploadDir}
     const problem = (status,message) => Object.assign(Error(message),{status});
     try {
       if (!/^\d+$/.test(req.params.id)) throw problem(404,'الإعلان غير موجود.');
-      const listing = (await pool.query("SELECT id,title,raw_data->'local_video' AS local_video FROM market_listings WHERE id=$1 AND status='published' AND raw_data->>'import_batch'=$2",[req.params.id,data.snapshot])).rows[0];
+      const listing = (await pool.query("SELECT id,title,raw_data->'local_video' AS local_video FROM market_listings WHERE id=$1 AND status='published' AND raw_data->>'import_batch'=ANY($2::text[])",[req.params.id,publishedBatches])).rows[0];
       if (!listing) throw problem(404,'الإعلان غير موجود أو أُخفي.');
       if ((await space()).free_bytes < reserve+MAX_BYTES*2) throw problem(507,'المساحة المتاحة لا تكفي لحفظ فيديو جديد وتجهيزه.');
       await fs.mkdir(tempDir,{recursive:true});
@@ -46,7 +46,7 @@ module.exports = function registerOfficeVideos(app,{pool,requireAdmin,uploadDir}
       await fs.rename(output,publishedVideo); output = publishedVideo;
       if (info.hasPoster) { await fs.rename(poster,publishedPoster); poster = publishedPoster; }
       const local = {url:'/uploads/'+name+'.mp4',poster:info.hasPoster?'/uploads/'+name+'.jpg':null,title:listing.title,source_type:'upload',size_bytes:info.size_bytes,duration:info.duration,has_audio:info.has_audio,saved_at:new Date().toISOString()};
-      const result = await pool.query("UPDATE market_listings SET raw_data=jsonb_set(COALESCE(raw_data,'{}'::jsonb),'{local_video}',$1::jsonb),updated_at=NOW() WHERE id=$2 AND status='published' RETURNING id",[JSON.stringify(local),listing.id]);
+      const result = await pool.query("UPDATE market_listings SET raw_data=jsonb_set(COALESCE(raw_data,'{}'::jsonb),'{local_video}',$1::jsonb),updated_at=NOW() WHERE id=$2 AND status='published' AND raw_data->>'import_batch'=ANY($3::text[]) RETURNING id",[JSON.stringify(local),listing.id,publishedBatches]);
       if (!result.rows.length) throw Error('أُخفي الإعلان أثناء الحفظ. لم يتم استبدال الفيديو.');
       committed = true;
       // Only remove this feature's previous generated files after the database commit.

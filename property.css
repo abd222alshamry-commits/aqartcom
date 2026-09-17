@@ -7,3 +7,5 @@
 .compare-dock{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:20;background:#102a43;padding:8px;border-radius:12px;box-shadow:0 8px 30px #102a4355;display:flex;gap:8px}.compare-dock button,.compare-dock a{border:0;border-radius:8px;padding:10px 15px;font:inherit;font-weight:800;text-decoration:none;cursor:pointer}.compare-dock button{background:#fff;color:#102a43}.compare-dock a{background:#d9a72e;color:#102a43}
 
 #propertyMap{height:300px;isolation:isolate;direction:ltr;z-index:0}
+
+.property-location-warning{font-size:13px;font-weight:800;line-height:1.8;color:#885507;background:#fff4d8;padding:10px;border-radius:8px}.location-attribution{font-size:11px!important}[data-theme="dark"] .property-location-warning{background:#4a3a20;color:#ffe2a5}

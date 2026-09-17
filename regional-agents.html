@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>وكلاء البحث العقاري | عقارتكم</title><link rel="stylesheet" href="/regional-agents.css?v=20260917-1"><script src="/site-ui.js"></script><link rel="stylesheet" href="/site-ui.css"></head>
+<body>
+<header class="topbar"><a class="brand" href="/">⌂ عقارتكم</a><a href="/admin.html">لوحة الإدارة ←</a></header>
+<main>
+<div class="page-heading"><p class="eyebrow">إدارة جمع الإعلانات</p><h1>وكلاء البحث العقاري</h1><p class="intro">بحث إقليمي باستخدام Astra في عروض العقارات المنشورة للعامة.</p></div>
+<p id="pageStatus" class="notice" role="status">جاري التحقق من حساب المدير…</p>
+<a id="signIn" class="text-link" href="/" hidden>العودة للموقع لتسجيل الدخول</a>
+<section id="manager" hidden>
+<div class="platforms" aria-label="منصات البحث"><span>فيسبوك</span><span>إنستغرام</span><span>تيك توك</span></div>
+<p class="hint scope-note">البحث في النتائج العامة المفهرسة للمنصات الثلاث. هذا لا يعني ربط حساباتها، ولا يضمن العثور على جميع منشوراتها. قد تُحجب بعض المصادر أو لا تظهر في البحث.</p>
+<div class="metrics" aria-label="ملخص التغطية"><div><strong id="governorateCount">—</strong><span>محافظة</span></div><div><strong id="localityCount">—</strong><span>مدينة وبلدة وقرية</span></div><div><strong id="publishedCount">—</strong><span>إعلان نُشر</span></div><div><strong id="reviewCount">—</strong><span>أُحيل للمراجعة</span></div></div>
+<section class="panel connection-panel" aria-labelledby="connectionHeading">
+<div class="section-heading"><h2 id="connectionHeading">حالة التشغيل</h2><span id="modelName" class="model"></span></div>
+<dl class="connection-state"><div><dt>مفتاح OpenAI على الخادم</dt><dd id="keyState"></dd></div><div><dt>الوصول إلى Astra</dt><dd id="verifyState"></dd></div><div><dt>جدول البحث</dt><dd id="scheduleState"></dd></div></dl>
+<p id="setupNote" class="notice" hidden>للتشغيل، اضبط مفتاح OpenAI في إعدادات الخادم باسم <code dir="ltr">REGIONAL_OPENAI_API_KEY</code> أو <code dir="ltr">OPENAI_API_KEY</code>، ثم اختبر الاتصال هنا. لا تضع المفتاح في الإعلانات أو المحادثة.</p>
+<p id="pauseReason" class="error" hidden></p>
+<p id="verifiedAt" class="hint"></p>
+<div class="actions"><button id="verifyConnection" type="button" class="secondary">اختبار اتصال Astra</button><button id="toggleSchedule" type="button">تفعيل الجدول</button></div>
+<p id="activationNote" class="hint">يتطلب تفعيل الجدول مفتاحًا مضبوطًا واختبار اتصال ناجحًا.</p>
+</section>
+<section class="panel" aria-labelledby="scheduleHeading">
+<div class="section-heading"><h2 id="scheduleHeading">المواعيد وحدود البحث</h2><span class="timezone">بتوقيت سوريا</span></div>
+<div class="schedule-times"><span>٦:٠٠ مساءً <b dir="ltr">18:00</b></span><span>١١:٠٠ مساءً <b dir="ltr">23:00</b></span></div>
+<p id="nextRun" class="hint"></p>
+<p class="notice">التغطية تدريجية بحسب حد البحث؛ لا تُبحث جميع المناطق في كل جولة. كل طلب يخص منطقة ومنصة واحدة، ويستكمل النظام المناطق التالية في الجولات اللاحقة.</p>
+<form id="settingsForm"><fieldset id="settingsFields"><legend>إعدادات المدير</legend><div class="field-grid"><label for="callsPerCycle">الحد الأقصى للطلبات في الجولة<input id="callsPerCycle" type="number" inputmode="numeric" min="1" max="1000" step="1" required></label><label for="callsPerDay">الحد الأقصى للطلبات في اليوم<input id="callsPerDay" type="number" inputmode="numeric" min="1" max="2000" step="1" required></label></div><p class="hint">القيم الافتراضية: ٤٢ طلبًا في الجولة و٨٤ في اليوم. زيادة الحدود تزيد استخدام OpenAI وتكلفته. يشمل الحد اليومي البحث اليدوي والمجدول.</p><label class="check-option" for="autoPublish"><input id="autoPublish" type="checkbox"><span>نشر الإعلانات المستوفية للتحقق تلقائيًا<small>تُحال الإعلانات التي تحتاج تحققًا إضافيًا إلى المراجعة. عند إيقافه، تُحال جميع الاكتشافات الجديدة للمراجعة.</small></span></label><button id="saveSettings" type="submit" class="secondary">حفظ الإعدادات</button></fieldset></form>
+<div class="run-bar"><p id="dailyUsage"></p><button id="runNow" type="button">بدء جولة الآن</button></div><p id="runHint" class="hint"></p>
+<p id="actionStatus" role="status" aria-live="polite"></p><p id="actionError" class="error" role="alert" hidden></p>
+</section>
+<section class="panel" aria-labelledby="coverageHeading"><div class="section-heading"><h2 id="coverageHeading">تغطية المحافظات</h2><button id="refreshStatus" type="button" class="small secondary">تحديث</button></div><p class="hint">تغطية تراكمية لعمليات البحث المكتملة لكل موقع ومنصة، وتشمل البحث الذي لم يجد نتائج. لا تعني حصر جميع العروض.</p><p id="catalogNote" class="hint"></p><div id="coverageGrid" class="coverage-grid"></div></section>
+<section class="panel" aria-labelledby="targetHeading"><h2 id="targetHeading">المناطق ضمن خطة البحث</h2><form id="targetSearch" class="target-search" role="search"><label for="targetGovernorate">المحافظة<select id="targetGovernorate"><option value="">كل المحافظات</option></select></label><label for="targetQuery">اسم المدينة أو البلدة<input id="targetQuery" type="search" maxlength="100" placeholder="مثال: مشتى الحلو"></label><button id="searchTargets" type="submit" class="secondary">بحث</button></form><p id="targetStatus" class="hint" role="status"></p><ul id="targetList" class="target-list"></ul><div class="pagination"><button id="previousTargets" type="button" class="small secondary">السابق</button><span id="targetPage"></span><button id="nextTargets" type="button" class="small secondary">التالي</button></div></section>
+<section class="panel" aria-labelledby="runsHeading"><h2 id="runsHeading">الجولات الأخيرة</h2><div id="runHistory" class="history-list"></div></section>
+<section class="panel" aria-labelledby="jobsHeading"><div class="section-heading"><h2 id="jobsHeading">سجل البحث الأخير</h2><a class="text-link" href="/market-monitor.html">مراجعة الإعلانات ←</a></div><div id="jobHistory" class="history-list"></div></section>
+<p id="lastUpdated" class="hint updated-at"></p>
+</section>
+</main><script src="/regional-agents.js?v=20260917-1"></script>
+</body></html>
