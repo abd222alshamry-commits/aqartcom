@@ -1,0 +1,3 @@
+.host-hero{padding:30px;background:#123e35;color:#fff;border-radius:22px;margin-bottom:20px}.host-hero span{color:#efd296;font-weight:bold}.host-hero p{max-width:750px}.host-stats,.host-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.host-stats .panel{margin:0}.host-stats strong{font-size:28px;display:block}.host-list .panel{margin:12px 0}.host-list img{width:100%;height:160px;object-fit:cover;border-radius:12px}.host-list .actions a{font-size:14px}#auth{max-width:520px;margin:20px auto}h2{margin-top:22px}.pre-line{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.button.secondary{background:#e9eeeb;color:#254336}.host-hero h1{font-size:clamp(26px,5vw,42px)}.host-stats{margin:18px 0}.host-list .panel{overflow-wrap:anywhere}

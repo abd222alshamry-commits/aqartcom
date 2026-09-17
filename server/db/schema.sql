@@ -1258,3 +1258,22 @@ CREATE TABLE IF NOT EXISTS admin_access_events (
  id BIGSERIAL PRIMARY KEY, actor_user_id BIGINT REFERENCES users(id), target_user_id BIGINT REFERENCES users(id),
  permissions JSONB NOT NULL, is_active BOOLEAN NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_host BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS lodging_type VARCHAR(30) NOT NULL DEFAULT 'hotel' CHECK(lodging_type IN ('hotel','furnished_apartment','farm'));
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS rental_terms TEXT NOT NULL DEFAULT '';
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS free_cancel_hours INTEGER NOT NULL DEFAULT 24 CHECK(free_cancel_hours BETWEEN 0 AND 720);
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS terms_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS stay_terms_snapshot JSONB;
+ALTER TABLE hotel_reviews ADD COLUMN IF NOT EXISTS host_reply TEXT;
+ALTER TABLE hotel_reviews ADD COLUMN IF NOT EXISTS replied_at TIMESTAMPTZ;
+
+-- Preserve historical date-only deadlines at their previous UTC midnight. New
+-- bookings store the exact deadline calculated from the arrival time in Damascus.
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema()
+   AND table_name='hotel_bookings' AND column_name='cancellation_deadline' AND data_type='date') THEN
+  ALTER TABLE hotel_bookings ALTER COLUMN cancellation_deadline TYPE TIMESTAMPTZ
+   USING (cancellation_deadline::timestamp AT TIME ZONE 'UTC');
+ END IF;
+END $$;
