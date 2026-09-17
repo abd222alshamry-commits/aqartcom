@@ -137,7 +137,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
                     Destination.Home -> HomeScreen(Modifier.padding(padding), home, favorites, compared.map { it.id }.toSet(), darkMode, toggleDarkMode,
                         { collection = CollectionPage.Favorites }, viewModel::openProperty, viewModel::toggleFavorite, viewModel::toggleCompare,
                         viewModel::refreshHome, ::searchFor, { showMap(false) }, { destination = Destination.Add })
-                    Destination.Hotels -> HotelsScreen(Modifier.padding(padding), hotelsViewModel, user)
+                    Destination.Hotels -> HotelsScreen(Modifier.padding(padding), hotelsViewModel, user) { destination = Destination.Account }
                     Destination.Search -> SearchScreen(Modifier.padding(padding), viewModel, viewModel::openProperty) { showMap(true) }
                     Destination.Map -> MapScreen(Modifier.padding(padding), if (mapFromSearch) search else home, viewModel::openProperty, { if (mapFromSearch) viewModel.refresh() else viewModel.refreshHome() })
                     Destination.Add -> AddPropertyScreen(Modifier.padding(padding), viewModel, user, busy, onLogin = { destination = Destination.Account }) { pageState.removeState(Destination.Add.name); destination = Destination.Home }

@@ -30,7 +30,7 @@ fun AccountScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy
         return
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        SectionHeading("مساحتك العقارية", "كل ما تحتاجه في مكان واحد")
+        SectionHeading("حسابك في عقارتكم", "كل ما تحتاجه في مكان واحد")
         Spacer(Modifier.height(20.dp))
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer) {
             Column(Modifier.fillMaxWidth().padding(20.dp)) {

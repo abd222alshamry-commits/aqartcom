@@ -104,6 +104,11 @@ class AqartkomApi(context: Context) {
         hotelParser.cancelledReceipt(receipt, response)
     }
 
+    suspend fun hotelManagement(admin: Boolean): JSONObject = withContext(Dispatchers.IO) {
+        val path = if (admin) "/api/admin/hotels/executive-dashboard?days=30" else "/api/office/hotels"
+        executeJson(Request.Builder().url(origin + path).header("Cache-Control", "no-cache").get().build())
+    }
+
     suspend fun ownerDashboard(): OwnerDashboard = withContext(Dispatchers.IO) {
         val json = executeJson(Request.Builder().url("$origin/api/me/dashboard").get().build())
         OwnerDashboard(

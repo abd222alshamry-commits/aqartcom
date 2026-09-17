@@ -52,6 +52,7 @@ class HotelsViewModel(application: Application) : AndroidViewModel(application) 
         val json = JSONArray(preferences.getString("receipts", "[]"))
         (0 until json.length()).mapNotNull { runCatching { parser.receipt(json.getJSONObject(it)) }.getOrNull() }
     }.getOrDefault(emptyList())
+    suspend fun management(admin: Boolean): JSONObject = api.hotelManagement(admin)
     fun clearMessage() { _message.value = null }
     fun showMessage(text: String) { _message.value = text }
     fun ensureLoaded() { if (!started) search(_filters.value) }

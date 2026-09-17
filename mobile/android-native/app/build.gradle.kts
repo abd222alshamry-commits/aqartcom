@@ -12,8 +12,8 @@ android {
         applicationId = "com.aqartkom.mobileapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 141
-        versionName = "1.4.1"
+        versionCode = 142
+        versionName = "1.4.2"
         buildConfigField("String", "API_ORIGIN", "\"https://aqartcom-v93.onrender.com\"")
         ndk { abiFilters += "arm64-v8a" }
     }

@@ -42,7 +42,13 @@ import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
-fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?) {
+fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?, onAccount: () -> Unit) {
+    var management by rememberSaveable { mutableStateOf<String?>(null) }
+    if (management != null) {
+        BackHandler { management = null }
+        key(user?.id, user?.role, management) { HotelManagementScreen(modifier, vm, user, management == "admin", { management = null }, onAccount) }
+        return
+    }
     val page by vm.page.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val detail by vm.detail.collectAsStateWithLifecycle()
@@ -66,6 +72,13 @@ fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?) {
                     else Icon(Icons.Default.Hotel, null, Modifier.padding(10.dp).size(28.dp), tint = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) { Text(when (page) { HotelPage.Search -> "الفنادق والحجوزات"; HotelPage.Detail -> "الفندق والغرف"; HotelPage.Booking -> "مراجعة الحجز"; HotelPage.Receipt -> "تفاصيل الحجز"; HotelPage.History -> "حجوزات هذا الجهاز" }, style = MaterialTheme.typography.titleLarge); if (page == HotelPage.Search) Text("اختر وجهتك وإقامتك القادمة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     if (page == HotelPage.Search) TextButton(vm::history) { Text("حجوزاتي") }
+                }
+            }
+            if (page == HotelPage.Search) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton({ management = "partner" }, Modifier.weight(1f)) { Text("شركاء الفنادق") }
+                    if (user?.role == "admin") Button({ management = "admin" }, Modifier.weight(1f)) { Text("إدارة الفنادق") }
+                    else if (user == null) TextButton(onAccount, Modifier.weight(1f)) { Text("دخول الإدارة والشركاء") }
                 }
             }
             pages.SaveableStateProvider(if (page == HotelPage.Search) "hotel-search" else "${page.name}-${(detail as? LoadState.Ready)?.value?.hotel?.id.orEmpty()}") {
