@@ -9,7 +9,7 @@ const html=fs.readFileSync(path.join(root,'regional-agents.html'),'utf8');
 const script=fs.readFileSync(path.join(root,'regional-agents.js'),'utf8');
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 function fixture(overrides={}){
-  return {model:'gpt-6-astra',timezone:'Asia/Damascus',times:['18:00','23:00'],configured:false,verified:false,
+  return {model:'gpt-5.6-sol',timezone:'Asia/Damascus',times:['18:00','23:00'],configured:false,verified:false,
     settings:{enabled:false,calls_per_cycle:42,calls_per_day:84,auto_publish:true,pause_reason:null,verified_at:null},
     catalog:{governorates:14,localities:7605,targets:7619,coverageNote:'الأحياء غير مكتملة.',byGovernorate:[{id:'SY01',name:'دمشق',localities:2,targets:3}]},
     platforms:['facebook','instagram','tiktok'],total_tasks:22857,next_run:'2026-09-17T15:00:00Z',calls_today:0,stats:[],coverage:[],jobs:[],runs:[],...overrides};

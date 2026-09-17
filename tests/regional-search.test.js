@@ -143,7 +143,7 @@ test('only supported platform post citations count, from search sources, open ac
   assert.equal(sources.get('333333'), 'https://www.facebook.com/reel/333333/');
 });
 
-test('search requests Astra with mandatory domain-limited web search and a strict output schema', async () => {
+test('search requests Sol 5.6 with mandatory domain-limited web search and a strict output schema', async () => {
   for (const platform of ['facebook', 'instagram', 'tiktok']) {
     let calls = 0;
     const secret = 'sk-unit-test-not-a-real-key';
@@ -155,7 +155,7 @@ test('search requests Astra with mandatory domain-limited web search and a stric
       assert.equal(options.headers['Content-Type'], 'application/json');
       assert.ok(options.signal instanceof AbortSignal);
       const body = JSON.parse(options.body);
-      assert.equal(body.model, 'gpt-6-astra');
+      assert.equal(body.model, 'gpt-5.6-sol');
       assert.equal(body.store, false);
       assert.equal(body.tool_choice, 'required');
       assert.deepEqual(body.tools, [{ type: 'web_search', filters: { allowed_domains: [platform + '.com'] } }]);

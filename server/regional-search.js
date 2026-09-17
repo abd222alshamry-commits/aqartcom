@@ -1,6 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
-const MODEL = 'gpt-6-astra';
+const MODEL = 'gpt-5.6-sol';
 const DOMAINS = {facebook:'facebook.com',instagram:'instagram.com',tiktok:'tiktok.com'};
 const normalize = v => String(v || '').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/[\u064b-\u065f\u0640]/g,'').replace(/\s+/g,' ').trim();
 
@@ -89,7 +89,8 @@ function validateListing(item, {target,platform,sources,now = new Date()}) {
     price:item.currency?price:null,currency:price?item.currency:null,area,phone:verifiedPhone,
     property_type:String(item.property_type||'عقار').slice(0,80),listing_mode:item.listing_mode,
     publishable:Boolean(readable && item.available && !sold && matchedLocation && recent && item.listing_mode),
-    raw_data:{import_batch:'regional-astra-v1',office_key:'regional-'+target.governorateId,
+    // The batch is a stable data contract shared with existing listing readers.
+    raw_data:{import_batch:'regional-astra-v1',source_model:MODEL,office_key:'regional-'+target.governorateId,
       source_published_at:recent?new Date(published).toISOString():null,observed_at:now.toISOString(),
       governorate_id:target.governorateId,locality_id:target.kind==='governorate'?null:target.id,
       availability:sold?'sold':item.available?'unconfirmed':'unknown',media_kind:item.media_kind,
@@ -99,13 +100,13 @@ function validateListing(item, {target,platform,sources,now = new Date()}) {
 }
 
 function apiError(status) {
-  return Object.assign(Error(status===401||status===403?'تعذر اعتماد مفتاح OpenAI أو الوصول إلى Astra.':status===429?'بلغ حساب OpenAI حد الاستخدام أو معدل الطلبات.':'تعذر إتمام البحث لدى OpenAI ('+status+').'),{pause:[400,401,403,404,429].includes(status)});
+  return Object.assign(Error(status===401||status===403?'تعذر اعتماد مفتاح OpenAI أو الوصول إلى Sol 5.6.':status===429?'بلغ حساب OpenAI حد الاستخدام أو معدل الطلبات.':'تعذر إتمام البحث لدى OpenAI ('+status+').'),{pause:[400,401,403,404,429].includes(status)});
 }
 async function verifyKey(key,fetcher=fetch) {
   if(!key)throw Object.assign(Error('يلزم ربط مفتاح OpenAI على الخادم.'),{pause:true});
   const r=await fetcher('https://api.openai.com/v1/models/'+MODEL,{headers:{Authorization:'Bearer '+key},signal:AbortSignal.timeout(20000)});
   if(!r.ok)throw apiError(r.status);
-  const data=await r.json(); if(data.id!==MODEL)throw Error('لم يؤكد الحساب الوصول إلى نموذج Astra المطلوب.');
+  const data=await r.json(); if(data.id!==MODEL)throw Error('لم يؤكد الحساب الوصول إلى نموذج Sol 5.6 المطلوب.');
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 async function searchRegion({target,platform,key,now=new Date(),fetcher=fetch}) {

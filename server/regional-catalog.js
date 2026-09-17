@@ -47,6 +47,27 @@ for (let round = 0; round < rounds; round++) {
 const targets = Object.freeze(orderedTargets);
 const targetById = new Map(targets.map(target => [target.id, target]));
 
+// Six priority governorates get one turn each, then one of the other eight.
+// Each governorate wraps its own queue, so small areas are revisited regularly.
+const SEARCH_PLAN = 'priority-six-v1';
+const PRIORITY_IDS = Object.freeze(['sy-damascus','sy-aleppo','sy-latakia','sy-hama','sy-tartus','sy-homs']);
+const priorityGovernors = Object.freeze(PRIORITY_IDS.map(id => governors.find(g => g.id === id)));
+const otherGovernors = governors.filter(g => !PRIORITY_IDS.includes(g.id));
+const searchQueues = new Map(governors.map(g => {
+  const places = targets.filter(t => t.governorateId === g.id && t.kind !== 'governorate');
+  const rank = t => t.name === g.name ? 0 : t.kind === 'city' ? 1 : 2;
+  places.sort((a,b) => rank(a)-rank(b));
+  return [g.id, [targetById.get(g.id), ...places]];
+}));
+function searchTaskAt(cursor) {
+  const platformCount = PLATFORMS.length;
+  const turn = Math.floor(cursor/platformCount), slot = turn%7, round = Math.floor(turn/7);
+  const governor = slot<6 ? priorityGovernors[slot] : otherGovernors[round%otherGovernors.length];
+  const visit = slot<6 ? round : Math.floor(round/otherGovernors.length);
+  const queue = searchQueues.get(governor.id);
+  return {target:queue[visit%queue.length],platform:PLATFORMS[cursor%platformCount]};
+}
+
 function findTarget(id) {
   return targetById.get(id) || null;
 }
@@ -70,4 +91,4 @@ function summary() {
   };
 }
 
-module.exports = { governors, localities, targets, findTarget, summary, PLATFORMS };
+module.exports = { governors, localities, targets, findTarget, summary, PLATFORMS, SEARCH_PLAN, priorityGovernors, searchTaskAt };

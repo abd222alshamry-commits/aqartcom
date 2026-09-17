@@ -14,7 +14,7 @@ async function until(check, message) {
   do { if (await check()) return; await delay(15); } while (Date.now() < deadline);
   assert.fail(message || 'The local worker did not reach the expected state');
 }
-async function fixture(t, { env = {}, fetcher } = {}) {
+async function fixture(t, { env = {}, fetcher, beforeRegister } = {}) {
   const db = new PGlite();
   await db.waitReady;
   await db.exec(await fs.readFile(path.join(__dirname, '../server/db/schema.sql'), 'utf8'));
@@ -34,6 +34,7 @@ async function fixture(t, { env = {}, fetcher } = {}) {
     if (fetcher) return fetcher(url, options);
     assert.fail('This test must not issue an OpenAI request');
   };
+  if(beforeRegister)await beforeRegister(pool);
   const controller = await register(app, { pool, requireAdmin, env, fetcher:mockFetch, startTimer:false });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
@@ -57,9 +58,9 @@ function marketItem(id, overrides = {}) {
 function fakeResponse(platform = 'facebook', includeOffer = false) {
   const url = platform === 'facebook' ? 'https://www.facebook.com/reel/123456789/' : platform === 'instagram' ? 'https://www.instagram.com/p/Test123/' : 'https://www.tiktok.com/@test/video/123456789';
   const listings = includeOffer ? [{
-    url, title:'شقة للبيع في الحسكة', summary:'عرض عقاري من مصدر اختبار.', advertiser_name:'مكتب اختبار',
-    published_at:new Date(Date.now() - 3600000).toISOString(), location_evidence:'محافظة الحسكة',
-    source_excerpt:'شقة للبيع في محافظة الحسكة، السعر 42500 دولار، المساحة 120 متر مربع.',
+    url, title:'شقة للبيع في دمشق', summary:'عرض عقاري من مصدر اختبار.', advertiser_name:'مكتب اختبار',
+    published_at:new Date(Date.now() - 3600000).toISOString(), location_evidence:'محافظة دمشق',
+    source_excerpt:'شقة للبيع في محافظة دمشق، السعر 42500 دولار، المساحة 120 متر مربع.',
     source_read:true, is_offer:true, available:true, property_type:'شقة', listing_mode:'sale',
     price:42500, currency:'USD', area:120, phone:null, media_kind:'image'
   }] : [];
@@ -85,10 +86,11 @@ test('Damascus daily slots are 18:00 and 23:00 across exact times and date bound
   assert.equal(TOTAL_TASKS, 7619 * 3);
   assert.deepEqual([0,1,2].map(index => taskAt(index).platform), ['facebook','instagram','tiktok']);
   assert.equal(taskAt(3).target.id, catalog.governors[1].id);
-  assert.equal(taskAt(TOTAL_TASKS).target.id, taskAt(0).target.id);
+  assert.equal(taskAt(0).target.id, 'sy-damascus');
+  assert.ok(taskAt(TOTAL_TASKS).target);
 });
 
-test('enqueue is idempotent per scheduled slot and advances a durable cursor, including wraparound', async t => {
+test('enqueue is idempotent per scheduled slot and advances a durable cursor, without resetting at the old catalog boundary', async t => {
   const f = await fixture(t);
   await f.pool.query('UPDATE regional_agent_settings SET calls_per_cycle=3 WHERE id=1');
   const settings = async () => (await f.pool.query('SELECT * FROM regional_agent_settings WHERE id=1')).rows[0];
@@ -101,7 +103,7 @@ test('enqueue is idempotent per scheduled slot and advances a durable cursor, in
   let jobs = (await f.pool.query('SELECT * FROM regional_agent_jobs ORDER BY id')).rows;
   assert.equal(jobs.length, 3);
   assert.deepEqual(jobs.map(job => job.platform), ['facebook','instagram','tiktok']);
-  assert.ok(jobs.every(job => job.target_id === catalog.governors[0].id));
+  assert.ok(jobs.every(job => job.target_id === 'sy-damascus'));
   // A fresh registration reads the same stored cursor; it cannot reset coverage.
   const restarted = await register(express(), { pool:f.pool, requireAdmin:(_req,_res,next) => next(), env:{}, startTimer:false });
   restarted.stop();
@@ -122,12 +124,12 @@ test('enqueue is idempotent per scheduled slot and advances a durable cursor, in
   await f.pool.query("UPDATE regional_agent_jobs SET state='empty',finished_at=NOW() WHERE state='pending'");
   await f.pool.query('UPDATE regional_agent_settings SET next_cursor=$1,calls_per_cycle=2 WHERE id=1', [TOTAL_TASKS - 1]);
   await enqueue(f.pool, { key:'wrap-test', at:new Date() }, await settings());
-  assert.equal((await settings()).next_cursor, 1);
+  assert.equal((await settings()).next_cursor, TOTAL_TASKS+1);
   jobs = (await f.pool.query('SELECT * FROM regional_agent_jobs ORDER BY id DESC LIMIT 2')).rows.reverse();
   assert.equal(jobs[0].platform, 'tiktok');
-  assert.equal(jobs[0].target_id, catalog.targets.at(-1).id);
+  assert.equal(jobs[0].target_id, taskAt(TOTAL_TASKS-1).target.id);
   assert.equal(jobs[1].platform, 'facebook');
-  assert.equal(jobs[1].target_id, catalog.targets[0].id);
+  assert.equal(jobs[1].target_id, taskAt(TOTAL_TASKS).target.id);
   assert.equal(f.calls.length, 0);
 });
 
@@ -176,7 +178,7 @@ test('verified mock key enables runs, executes one job per tick and enforces the
   let responseCalls = 0;
   const f = await fixture(t, { env:{ REGIONAL_OPENAI_API_KEY:secret }, fetcher:async (url, options) => {
     assert.equal(options.headers.Authorization, 'Bearer ' + secret);
-    if (url === 'https://api.openai.com/v1/models/gpt-6-astra') return { ok:true, json:async () => ({ id:'gpt-6-astra' }) };
+    if (url === 'https://api.openai.com/v1/models/gpt-5.6-sol') return { ok:true, json:async () => ({ id:'gpt-5.6-sol' }) };
     assert.equal(url, 'https://api.openai.com/v1/responses');
     responseCalls++;
     const platform = JSON.parse(options.body).tools[0].filters.allowed_domains[0].split('.')[0];
@@ -198,11 +200,12 @@ test('verified mock key enables runs, executes one job per tick and enforces the
   const stored = (await f.pool.query('SELECT * FROM market_listings')).rows;
   assert.equal(stored.length, 1);
   assert.equal(stored[0].status, 'published');
-  assert.equal(stored[0].city, 'الحسكة');
+  assert.equal(stored[0].city, 'دمشق');
   assert.equal(stored[0].price, '42500.00');
   const summary = await (await f.request()).json();
   assert.equal(summary.calls_today, 2);
   assert.equal(summary.verified, true);
+  assert.ok(summary.jobs.every(job=>job.model==='gpt-5.6-sol'));
   assert.equal(JSON.stringify(summary).includes(secret), false);
   assert.ok(summary.runs.find(item => item.id === runId).finished_at);
   assert.equal((await f.request('/run', { method:'POST' })).status, 409);
@@ -220,7 +223,7 @@ test('a mocked 429 pauses the worker, records a safe error and does not retry ch
   let responseCalls = 0;
   const secret = 'sk-local-only-rate-limit-test';
   const f = await fixture(t, { env:{ OPENAI_API_KEY:secret }, fetcher:async url => {
-    if (url.includes('/models/')) return { ok:true, json:async () => ({ id:'gpt-6-astra' }) };
+    if (url.includes('/models/')) return { ok:true, json:async () => ({ id:'gpt-5.6-sol' }) };
     responseCalls++;
     return { ok:false, status:429, json:async () => { assert.fail('The error body should not be read'); } };
   } });
@@ -236,4 +239,43 @@ test('a mocked 429 pauses the worker, records a safe error and does not retry ch
   await f.controller.tick();
   assert.equal(responseCalls, 1);
   assert.equal((await f.pool.query('SELECT COUNT(*)::int AS count FROM market_listings')).rows[0].count, 0);
+});
+
+
+test('priority plan allocates 36 of the first 42 searches to the six requested governorates', () => {
+  const ids=['sy-damascus','sy-aleppo','sy-latakia','sy-hama','sy-tartus','sy-homs'];
+  const tasks=Array.from({length:42},(_,i)=>taskAt(i));
+  assert.deepEqual(tasks.slice(0,18).filter((_,i)=>i%3===0).map(t=>t.target.id),ids);
+  for(const id of ids)assert.equal(tasks.filter(t=>t.target.governorateId===id).length,6);
+  assert.equal(new Set(tasks.map(t=>t.target.id+':'+t.platform)).size,42);
+  const extended=Array.from({length:21*8},(_,i)=>taskAt(i));
+  assert.equal(new Set(extended.map(t=>t.target.governorateId)).size,14);
+  // Damascus is revisited after its short queue, while larger queues keep moving.
+  assert.equal(taskAt(21*3).target.id,'sy-damascus');
+  assert.notEqual(taskAt(21*3+3).target.id,'sy-aleppo');
+});
+
+test('large priority rounds skip duplicate target/platform pairs without shrinking the saved limit',async t=>{
+  const f=await fixture(t);
+  const s=(await f.pool.query('SELECT * FROM regional_agent_settings WHERE id=1')).rows[0];
+  const id=await enqueue(f.pool,{key:'large-priority-run',at:new Date()},{...s,calls_per_cycle:1000});
+  const jobs=(await f.pool.query('SELECT target_id,platform FROM regional_agent_jobs WHERE run_id=$1',[id])).rows;
+  assert.equal(jobs.length,1000);
+  assert.equal(new Set(jobs.map(j=>j.target_id+':'+j.platform)).size,1000);
+  assert.ok((await f.pool.query('SELECT next_cursor FROM regional_agent_settings')).rows[0].next_cursor>1000);
+});
+
+test('migration pauses old model verification, resets ordering once, and preserves limits and history',async t=>{
+  const f=await fixture(t,{env:{OPENAI_API_KEY:'sk-local-only'},beforeRegister:async pool=>{
+    await pool.query(await fs.readFile(path.join(__dirname,'../server/regional-agents-schema.sql'),'utf8'));
+    await pool.query("UPDATE regional_agent_settings SET enabled=TRUE,calls_per_cycle=42,calls_per_day=84,next_cursor=2,verified_model='gpt-6-astra',verified_key_hash=$1 WHERE id=1",[require('node:crypto').createHash('sha256').update('sk-local-only').digest('hex')]);
+    await pool.query("INSERT INTO regional_agent_runs(slot,scheduled_at) VALUES('old-history',NOW())");
+  }});
+  const s=(await f.pool.query('SELECT * FROM regional_agent_settings WHERE id=1')).rows[0];
+  assert.equal(s.enabled,false);assert.equal(s.next_cursor,0);assert.equal(s.search_plan,catalog.SEARCH_PLAN);
+  assert.equal(s.calls_per_cycle,42);assert.equal(s.calls_per_day,84);
+  assert.equal((await f.request('/settings',{method:'PATCH',body:{enabled:true}})).status,409);
+  assert.equal((await (await f.request()).json()).verified,false);
+  assert.equal((await f.pool.query('SELECT COUNT(*)::int AS n FROM regional_agent_runs')).rows[0].n,1);
+  assert.equal(f.calls.length,0);
 });

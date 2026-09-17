@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS regional_agent_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 INSERT INTO regional_agent_settings(id) VALUES(1) ON CONFLICT DO NOTHING;
+ALTER TABLE regional_agent_settings ADD COLUMN IF NOT EXISTS verified_model TEXT;
+ALTER TABLE regional_agent_settings ADD COLUMN IF NOT EXISTS search_plan TEXT;
 CREATE TABLE IF NOT EXISTS regional_agent_runs (
   id BIGSERIAL PRIMARY KEY,
   slot TEXT UNIQUE NOT NULL,
@@ -41,3 +43,4 @@ CREATE TABLE IF NOT EXISTS regional_agent_jobs (
 );
 CREATE INDEX IF NOT EXISTS regional_agent_jobs_queue ON regional_agent_jobs(state,id);
 CREATE INDEX IF NOT EXISTS regional_agent_jobs_coverage ON regional_agent_jobs(target_id,platform,finished_at);
+ALTER TABLE regional_agent_jobs ADD COLUMN IF NOT EXISTS model TEXT;

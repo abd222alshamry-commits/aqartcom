@@ -22,7 +22,7 @@ function schedule(now=new Date()){
   const times=[yesterday,day,tomorrow].flatMap(d=>[18,23].map(h=>({key:d+'T'+h+':00',at:wallTime(d,h)})));
   return {due:times.filter(x=>x.at<=now).at(-1),next:times.find(x=>x.at>now)};
 }
-function taskAt(cursor){const target=catalog.targets[Math.floor(cursor/3)%catalog.targets.length];return {target,platform:catalog.PLATFORMS[cursor%3]};}
+const taskAt=catalog.searchTaskAt;
 const keyHash=key=>key?crypto.createHash('sha256').update(key).digest('hex'):null;
 
 async function saveListings(db,listings,autoPublish){
@@ -49,10 +49,14 @@ async function enqueue(db,slot,settings){
     return run.id;
   }
   let cursor=settings.next_cursor;
-  for(let i=0;i<settings.calls_per_cycle;i++){
+  const selected=new Set();
+  while(selected.size<settings.calls_per_cycle){
     const {target,platform}=taskAt(cursor);
+    cursor++;
+    const identity=target.id+':'+platform;
+    if(selected.has(identity))continue;
+    selected.add(identity);
     await db.query(`INSERT INTO regional_agent_jobs(run_id,target_id,governorate_id,platform) VALUES($1,$2,$3,$4)`,[run.id,target.id,target.governorateId,platform]);
-    cursor=(cursor+1)%TOTAL_TASKS;
   }
   await db.query('UPDATE regional_agent_runs SET planned_count=$1 WHERE id=$2',[settings.calls_per_cycle,run.id]);
   await db.query('UPDATE regional_agent_settings SET next_cursor=$1 WHERE id=1',[cursor]);
@@ -61,6 +65,9 @@ async function enqueue(db,slot,settings){
 
 async function register(app,{pool,requireAdmin,env=process.env,fetcher=fetch,startTimer=true}){
   await pool.query(fs.readFileSync(path.join(__dirname,'regional-agents-schema.sql'),'utf8'));
+  // Reset the old ordering once. Existing jobs retain their explicit target IDs.
+  await pool.query('UPDATE regional_agent_settings SET next_cursor=0,search_plan=$1 WHERE search_plan IS DISTINCT FROM $1',[catalog.SEARCH_PLAN]);
+  await pool.query("UPDATE regional_agent_settings SET enabled=FALSE,pause_reason='تغير النموذج؛ اختبر الاتصال قبل استئناف الجدول.' WHERE enabled AND verified_model IS DISTINCT FROM $1",[MODEL]);
   let working=false,stopped=false;
   const key=()=>env.REGIONAL_OPENAI_API_KEY||env.OPENAI_API_KEY||'';
   async function settings(db=pool){return (await db.query('SELECT * FROM regional_agent_settings WHERE id=1')).rows[0];}
@@ -75,7 +82,7 @@ async function register(app,{pool,requireAdmin,env=process.env,fetcher=fetch,sta
     working=true;
     try{await locked(async db=>{
       const s=await settings(db);if(!s.enabled)return;
-      if(!key()||s.verified_key_hash!==keyHash(key())){
+      if(!key()||s.verified_key_hash!==keyHash(key())||s.verified_model!==MODEL){
         await db.query("UPDATE regional_agent_settings SET enabled=FALSE,pause_reason='يلزم اختبار اتصال OpenAI قبل تشغيل البحث.' WHERE id=1");return;
       }
       // An abandoned network request may already have incurred cost; never repeat it automatically.
@@ -85,7 +92,7 @@ async function register(app,{pool,requireAdmin,env=process.env,fetcher=fetch,sta
         await db.query('BEGIN');try{await enqueue(db,slot,s);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}
       }
       if(await dayCount(db,now)>=s.calls_per_day)return;
-      const job=(await db.query(`UPDATE regional_agent_jobs SET state='running',started_at=NOW() WHERE id=(SELECT id FROM regional_agent_jobs WHERE state='pending' ORDER BY id LIMIT 1) RETURNING *`)).rows[0];
+      const job=(await db.query(`UPDATE regional_agent_jobs SET state='running',started_at=NOW(),model=$1 WHERE id=(SELECT id FROM regional_agent_jobs WHERE state='pending' ORDER BY id LIMIT 1) RETURNING *`,[MODEL])).rows[0];
       if(!job)return;
       try{
         const target=catalog.findTarget(job.target_id);if(!target)throw Error('المنطقة غير موجودة في الكتالوج.');
@@ -116,7 +123,8 @@ async function register(app,{pool,requireAdmin,env=process.env,fetcher=fetch,sta
     const coverage=(await pool.query(`SELECT governorate_id,COUNT(DISTINCT (target_id,platform))::int AS searched,MAX(finished_at) AS last_searched FROM regional_agent_jobs WHERE state IN ('completed','empty') GROUP BY governorate_id`)).rows;
     const jobs=(await pool.query('SELECT * FROM regional_agent_jobs ORDER BY id DESC LIMIT 45')).rows.map(j=>({...j,target_name:catalog.findTarget(j.target_id)?.name||j.target_id}));
     const runs=(await pool.query(`SELECT r.*,COUNT(j.id) FILTER(WHERE j.state IN ('pending','running'))::int AS pending FROM regional_agent_runs r LEFT JOIN regional_agent_jobs j ON j.run_id=r.id GROUP BY r.id ORDER BY r.id DESC LIMIT 10`)).rows;
-    res.json({model:MODEL,timezone:TIMEZONE,times:['18:00','23:00'],configured:!!key(),verified:!!key()&&s.verified_key_hash===keyHash(key()),
+    res.json({model:MODEL,timezone:TIMEZONE,times:['18:00','23:00'],configured:!!key(),verified:!!key()&&s.verified_key_hash===keyHash(key())&&s.verified_model===MODEL,
+      priority_governorates:catalog.priorityGovernors,priority_share:6/7,
       settings:{enabled:s.enabled,calls_per_cycle:s.calls_per_cycle,calls_per_day:s.calls_per_day,auto_publish:s.auto_publish,pause_reason:s.pause_reason,verified_at:s.verified_at},
       catalog:catalog.summary(),platforms:catalog.PLATFORMS,total_tasks:TOTAL_TASKS,next_run:schedule().next.at,
       calls_today:await dayCount(),stats,coverage,jobs,runs});
@@ -128,8 +136,8 @@ async function register(app,{pool,requireAdmin,env=process.env,fetcher=fetch,sta
   }));
   app.post('/api/admin/regional-agents/verify',requireAdmin,origin,route(async(_req,res)=>{
     const hash=await verifyKey(key(),fetcher);
-    await pool.query('UPDATE regional_agent_settings SET verified_key_hash=$1,verified_at=NOW(),pause_reason=NULL WHERE id=1',[hash]);
-    res.json({ok:true,message:'تم تأكيد الوصول إلى Astra. يمكنك تشغيل الجدول.'});
+    await pool.query('UPDATE regional_agent_settings SET verified_key_hash=$1,verified_model=$2,verified_at=NOW(),pause_reason=NULL WHERE id=1',[hash,MODEL]);
+    res.json({ok:true,message:'تم تأكيد الوصول إلى Sol 5.6. يمكنك تشغيل الجدول.'});
   }));
   app.patch('/api/admin/regional-agents/settings',requireAdmin,origin,route(async(req,res)=>{
     const s=await settings(),body=req.body||{};
@@ -137,13 +145,14 @@ async function register(app,{pool,requireAdmin,env=process.env,fetcher=fetch,sta
     if(!Number.isInteger(cycle)||cycle<1||cycle>1000||!Number.isInteger(daily)||daily<cycle||daily>2000)return res.status(400).json({error:'حد الجولة من 1 إلى1000، وحد اليوم أكبر منه أو يساويه وحتى2000.'});
     for(const field of ['enabled','auto_publish'])if(body[field]!==undefined&&typeof body[field]!=='boolean')return res.status(400).json({error:'إعداد غير صالح.'});
     const enabled=body.enabled??s.enabled;
-    if(enabled&&(!key()||s.verified_key_hash!==keyHash(key())))return res.status(409).json({error:'اربط مفتاح OpenAI على الخادم ثم اختبر الاتصال أولًا.'});
+    if(enabled&&(!key()||s.verified_key_hash!==keyHash(key())||s.verified_model!==MODEL))return res.status(409).json({error:'اربط مفتاح OpenAI على الخادم ثم اختبر الاتصال أولًا.'});
     await pool.query(`UPDATE regional_agent_settings SET enabled=$1,enabled_at=CASE WHEN $1 AND NOT enabled THEN NOW() ELSE enabled_at END,
       calls_per_cycle=$2,calls_per_day=$3,auto_publish=$4,pause_reason=NULL,updated_at=NOW() WHERE id=1`,[enabled,cycle,daily,body.auto_publish??s.auto_publish]);
     res.json({ok:true});
   }));
   app.post('/api/admin/regional-agents/run',requireAdmin,origin,route(async(_req,res)=>{
     const s=await settings();if(!s.enabled)return res.status(409).json({error:'شغّل البحث بعد ربط الحساب واختبار الاتصال.'});
+    if(!key()||s.verified_key_hash!==keyHash(key())||s.verified_model!==MODEL)return res.status(409).json({error:'اختبر الاتصال بالنموذج الحالي أولًا.'});
     const run=await locked(async db=>{
       if((await db.query("SELECT id FROM regional_agent_jobs WHERE state IN ('pending','running') LIMIT 1")).rows.length)throw Object.assign(Error('توجد جولة قيد التنفيذ أو الانتظار.'),{status:409});
       if(await dayCount(db)>=s.calls_per_day)throw Object.assign(Error('وصلت إلى حد البحث اليومي.'),{status:409});
