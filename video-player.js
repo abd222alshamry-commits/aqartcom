@@ -48,7 +48,7 @@
     const stage = viewer.querySelector('.video-viewer-stage');
     const tools = viewer.querySelector('.video-viewer-tools');
     const closeButton = viewer.querySelector('.video-viewer-close');
-    let media = null, closed = false, enteredFullscreen = false, historyAdded = false;
+    let media = null, frameObserver = null, closed = false, enteredFullscreen = false, historyAdded = false;
     const historyKey = 'video-' + Date.now();
     const inertElements = Array.from(document.body.children).filter(el => el !== viewer).map(el => [el, el.inert]);
     inertElements.forEach(([el]) => { el.inert = true; });
@@ -62,6 +62,8 @@
       document.removeEventListener('fullscreenchange', onFullscreen);
       document.removeEventListener('webkitfullscreenchange', onFullscreen);
       window.removeEventListener('pagehide', onHide);
+      frameObserver?.disconnect();
+      window.removeEventListener('resize', fitFrame);
       if (media?.tagName === 'VIDEO') {
         media.pause();
         if (document.pictureInPictureElement === media) document.exitPictureInPicture?.().catch(() => {});
@@ -96,6 +98,12 @@
         // The viewport-sized viewer remains usable when fullscreen is denied (e.g. embedded browsers).
         result?.catch(() => {});
       } catch (_) {}
+    }
+    function fitFrame() {
+      if (!media || source.type !== 'facebook') return;
+      // Facebook sizes its embedded reels by width; a wide iframe crops their controls.
+      // A portrait-safe width also accommodates landscape clips without clipping.
+      media.style.width = Math.max(1, Math.min(stage.clientWidth, stage.clientHeight * 9 / 16)) + 'px';
     }
     active = {close};
     closeButton.onclick = () => close();
@@ -142,6 +150,11 @@
       media.referrerPolicy = 'strict-origin-when-cross-origin';
       media.src = source.embed;
       stage.append(media);
+      if (source.type === 'facebook') {
+        fitFrame();
+        if (window.ResizeObserver) { frameObserver = new ResizeObserver(fitFrame); frameObserver.observe(stage); }
+        window.addEventListener('resize', fitFrame);
+      }
       tools.textContent = 'إذا لم يتوفر الفيديو هنا، افتحه من المصدر.';
       requestFullscreen();
     } else {
