@@ -64,8 +64,8 @@ fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (page != HotelPage.Search) IconButton(vm::back, enabled = !busy) { Icon(Icons.Default.ArrowForward, "رجوع") }
                     else Icon(Icons.Default.Hotel, null, Modifier.padding(10.dp).size(28.dp), tint = MaterialTheme.colorScheme.primary)
-                    Column(Modifier.weight(1f)) { Text(when (page) { HotelPage.Search -> "فنادق عقارتكم"; HotelPage.Detail -> "الفندق والغرف"; HotelPage.Booking -> "مراجعة الحجز"; HotelPage.Receipt -> "تفاصيل الحجز"; HotelPage.History -> "حجوزات هذا الجهاز" }, style = MaterialTheme.typography.titleLarge); if (page == HotelPage.Search) Text("اختر وجهتك وإقامتك القادمة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    if (page == HotelPage.Search) IconButton(vm::history) { Icon(Icons.Default.ConfirmationNumber, "حجوزاتي") }
+                    Column(Modifier.weight(1f)) { Text(when (page) { HotelPage.Search -> "الفنادق والحجوزات"; HotelPage.Detail -> "الفندق والغرف"; HotelPage.Booking -> "مراجعة الحجز"; HotelPage.Receipt -> "تفاصيل الحجز"; HotelPage.History -> "حجوزات هذا الجهاز" }, style = MaterialTheme.typography.titleLarge); if (page == HotelPage.Search) Text("اختر وجهتك وإقامتك القادمة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    if (page == HotelPage.Search) TextButton(vm::history) { Text("حجوزاتي") }
                 }
             }
             pages.SaveableStateProvider(if (page == HotelPage.Search) "hotel-search" else "${page.name}-${(detail as? LoadState.Ready)?.value?.hotel?.id.orEmpty()}") {

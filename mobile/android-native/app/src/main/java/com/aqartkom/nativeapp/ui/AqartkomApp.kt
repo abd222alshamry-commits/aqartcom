@@ -28,7 +28,7 @@ import com.aqartkom.nativeapp.data.*
 import com.aqartkom.nativeapp.ui.screens.*
 
 private enum class Destination(val label: String, val icon: ImageVector) {
-    Home("استكشف", Icons.Default.Home), Search("البحث", Icons.Default.Search), Hotels("الفنادق", Icons.Default.Hotel),
+    Sections("القسمان", Icons.Default.Apps), Home("العقارات", Icons.Default.Home), Search("البحث", Icons.Default.Search), Hotels("الفنادق", Icons.Default.Hotel),
     Add("أضف عقارك", Icons.Default.Add), Map("الخريطة", Icons.Default.Map), Account("حسابي", Icons.Default.PersonOutline)
 }
 
@@ -36,7 +36,7 @@ private enum class Destination(val label: String, val icon: ImageVector) {
 @Composable
 fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -> Unit) {
     val hotelsViewModel: HotelsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
-    var destination by rememberSaveable { mutableStateOf(Destination.Home) }
+    var destination by rememberSaveable { mutableStateOf(Destination.Sections) }
     var collection by rememberSaveable { mutableStateOf<CollectionPage?>(null) }
     var mapFromSearch by rememberSaveable { mutableStateOf(false) }
     var mapProperty by remember { mutableStateOf<Property?>(null) }
@@ -91,16 +91,30 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
         }
         return
     }
-    BackHandler(enabled = destination != Destination.Home) {
-        destination = if (destination == Destination.Map && mapFromSearch) Destination.Search else Destination.Home
+    BackHandler(enabled = destination != Destination.Sections) {
+        destination = when {
+            destination == Destination.Map && mapFromSearch -> Destination.Search
+            destination == Destination.Home || destination == Destination.Hotels || destination == Destination.Account -> Destination.Sections
+            else -> Destination.Home
+        }
     }
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
+        if (destination != Destination.Sections) Surface {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton({ destination = Destination.Sections }) { Icon(Icons.Default.Apps, "اختيار القسم") }
+                FilterChip(selected = destination in listOf(Destination.Home, Destination.Search, Destination.Add, Destination.Map), onClick = { destination = Destination.Home }, label = { Text("العقارات") })
+                FilterChip(selected = destination == Destination.Hotels, onClick = { destination = Destination.Hotels }, label = { Text("الفنادق والحجوزات") })
+            }
+        }
+    }, bottomBar = {
+        if (destination != Destination.Sections) {
         Column {
             if (compared.isNotEmpty() && destination != Destination.Hotels) Surface(onClick = { collection = CollectionPage.Compare }, color = Navy, contentColor = Color.White, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(14.dp)) {
                 Row(Modifier.padding(horizontal = 15.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CompareArrows, null, tint = Gold); Text("مقارنة العقارات (${compared.size}/3)", Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.labelLarge); Text("عرض", color = Gold); Icon(Icons.Default.ChevronLeft, null, tint = Gold) }
             }
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
-                listOf(Destination.Home, Destination.Hotels, Destination.Add, Destination.Map, Destination.Account).forEach { item ->
+                (if (destination == Destination.Hotels || destination == Destination.Account) listOf(Destination.Sections, Destination.Hotels, Destination.Account)
+                else listOf(Destination.Home, Destination.Search, Destination.Add, Destination.Map, Destination.Account)).forEach { item ->
                     NavigationBarItem(selected = destination == item, onClick = {
                         focus.clearFocus()
                         if (item == Destination.Search && search is LoadState.Loading) viewModel.refresh()
@@ -114,13 +128,15 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
                 }
             }
         }
+        }
     }) { padding ->
         AnimatedContent(targetState = destination, transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(100)) }, label = "main-navigation") { page ->
             pageState.SaveableStateProvider(page.name) {
                 when (page) {
+                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { destination = Destination.Hotels }, { destination = Destination.Account })
                     Destination.Home -> HomeScreen(Modifier.padding(padding), home, favorites, compared.map { it.id }.toSet(), darkMode, toggleDarkMode,
                         { collection = CollectionPage.Favorites }, viewModel::openProperty, viewModel::toggleFavorite, viewModel::toggleCompare,
-                        viewModel::refreshHome, ::searchFor, { showMap(false) }, { destination = Destination.Hotels })
+                        viewModel::refreshHome, ::searchFor, { showMap(false) }, { destination = Destination.Add })
                     Destination.Hotels -> HotelsScreen(Modifier.padding(padding), hotelsViewModel, user)
                     Destination.Search -> SearchScreen(Modifier.padding(padding), viewModel, viewModel::openProperty) { showMap(true) }
                     Destination.Map -> MapScreen(Modifier.padding(padding), if (mapFromSearch) search else home, viewModel::openProperty, { if (mapFromSearch) viewModel.refresh() else viewModel.refreshHome() })

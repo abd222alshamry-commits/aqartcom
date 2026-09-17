@@ -39,7 +39,7 @@ fun HomeScreen(
     modifier: Modifier, state: LoadState<List<Property>>, favorites: Set<String>, comparison: Set<String>,
     darkMode: Boolean, onDarkMode: () -> Unit, onFavorites: () -> Unit,
     onOpen: (String) -> Unit, onFavorite: (String) -> Unit, onCompare: (Property) -> Unit,
-    onRetry: () -> Unit, onSearch: (SearchFilters) -> Unit, onMap: () -> Unit, onHotels: () -> Unit
+    onRetry: () -> Unit, onSearch: (SearchFilters) -> Unit, onMap: () -> Unit, onAdd: () -> Unit
 ) {
     var page by rememberSaveable { mutableIntStateOf(0) }
     val rows = (state as? LoadState.Ready)?.value.orEmpty()
@@ -67,7 +67,7 @@ fun HomeScreen(
                 item(key = "shortcuts", span = { GridItemSpan(maxLineSpan) }) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         QuickAction("ابحث على الخريطة", "استكشف الموقع", Icons.Default.Map, Modifier.weight(1f), onMap)
-                        QuickAction("فنادق سوريا", "اختر الفندق وإقامتك", Icons.Default.Hotel, Modifier.weight(1f), onHotels)
+                        QuickAction("أضف عقارك", "انشر إعلان بيع أو إيجار", Icons.Default.AddHome, Modifier.weight(1f), onAdd)
                     }
                 }
                 item(key = "cities", span = { GridItemSpan(maxLineSpan) }) {
