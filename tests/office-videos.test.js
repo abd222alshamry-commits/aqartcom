@@ -105,5 +105,11 @@ test('admin upload persists playable video and poster, rejects bad replacements 
   const vm = require('node:vm'), window = {};
   vm.runInNewContext(await fs.readFile(path.join(__dirname,'../office-card.js'),'utf8'),{window,URL});
   const html = window.officeListingCard({...before,hosted_video:updated});
-  assert.ok(html.includes('href="'+updated.url+'"')); assert.ok(html.includes('src="'+updated.poster+'"'));
+  // The card opens the in-page player, retaining the replaced media URL.
+  const playData=html.match(/data-property-video="([^"]+)"/);
+  assert.ok(playData,'The uploaded clip must have a play control');
+  const media=JSON.parse(playData[1].replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'));
+  assert.equal(media.url,updated.url);
+  assert.equal(require('../video-player').resolveVideo(media.url).type,'file');
+  assert.ok(html.includes('src="'+updated.poster+'"'));
 });

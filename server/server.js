@@ -295,7 +295,7 @@ app.get('/api/hotels', async(req,res)=>{try{
 }catch(e){console.error(e);res.status(500).json({error:'تعذر تحميل الفنادق'});}});
 app.get('/api/hotels/:id', async(req,res)=>{try{const h=(await pool.query(`SELECT * FROM hotels WHERE id=$1 AND status='active'`,[req.params.id])).rows[0];if(!h)return res.status(404).json({error:'الفندق غير موجود'});const rooms=(await pool.query(`SELECT * FROM hotel_rooms WHERE hotel_id=$1 AND status='active' ORDER BY price`,[h.id])).rows;res.json({hotel:h,rooms});}catch(e){res.status(500).json({error:'تعذر تحميل الفندق'});}});
 app.post('/api/hotels/book', async(req,res)=>{try{
-  const b=req.body||{}; if(!dateValid(b.check_in,b.check_out))return res.status(400).json({error:'تواريخ الحجز غير صحيحة'}); const adults=Math.max(1,Number(b.adults)||1), children=Math.max(0,Number(b.children)||0), roomsCount=Math.max(1,Number(b.rooms_count)||1);
+  const b=req.body||{}; if(b.payment_method && b.payment_method!=='pay_at_hotel')return res.status(400).json({error:'الدفع الإلكتروني للفنادق غير مفعّل حالياً. اختر الدفع عند الوصول.'}); if(!dateValid(b.check_in,b.check_out))return res.status(400).json({error:'تواريخ الحجز غير صحيحة'}); const adults=Math.max(1,Number(b.adults)||1), children=Math.max(0,Number(b.children)||0), roomsCount=Math.max(1,Number(b.rooms_count)||1);
   const h=(await pool.query(`SELECT * FROM hotels WHERE id=$1 AND status='active'`,[b.hotel_id])).rows[0]; if(!h)return res.status(404).json({error:'الفندق غير موجود'});
   const client=await pool.connect(); let av; try{await client.query('BEGIN'); await client.query('SELECT pg_advisory_xact_lock($1)',[Number(b.room_id)]); const room=(await client.query('SELECT * FROM hotel_rooms WHERE id=$1 FOR UPDATE',[b.room_id])).rows[0]; if(!room||Number(room.hotel_id)!==Number(h.id)||room.status!=='active'){await client.query('ROLLBACK');client.release();return res.status(404).json({error:'الغرفة غير موجودة'});} const booked=(await client.query(`SELECT COALESCE(SUM(rooms_count),0)::int n FROM hotel_bookings WHERE room_id=$1 AND status IN ('pending','confirmed') AND check_in < $3 AND check_out > $2`,[b.room_id,b.check_in,b.check_out])).rows[0].n; const blocked=(await client.query(`SELECT COALESCE(SUM(quantity),0)::int n FROM hotel_availability_blocks WHERE room_id=$1 AND start_date < $3 AND end_date > $2`,[b.room_id,b.check_in,b.check_out])).rows[0].n; const available=Math.max(0,Number(room.quantity)-Number(booked)-Number(blocked)); av={ok:available>=roomsCount,room,available}; if(!av.ok){await client.query('ROLLBACK');client.release();return res.status(409).json({error:`لا يوجد توفر كافٍ. المتاح حالياً: ${av.available}`});} if(Number(av.room.max_guests)<adults){await client.query('ROLLBACK');client.release();return res.status(400).json({error:'عدد الضيوف أكبر من سعة الغرفة'});}
   const rate=(await client.query(`SELECT price,currency FROM hotel_room_rates WHERE room_id=$1 AND start_date <= $2 AND end_date > $2 ORDER BY created_at DESC LIMIT 1`,[av.room.id,b.check_in])).rows[0]||{price:av.room.price,currency:av.room.currency}; const n=Math.ceil((new Date(b.check_out)-new Date(b.check_in))/86400000); const discount=Number((await client.query(`SELECT COALESCE(MAX(discount_percent),0) discount FROM hotel_promotions WHERE hotel_id=$1 AND active=TRUE AND start_date <= $2 AND end_date >= $3`,[h.id,b.check_in,b.check_out])).rows[0].discount||0); const subtotal=Number(rate.price)*n*roomsCount; const total=Number((subtotal*(1-discount/100)).toFixed(2)); const commissionRate=Number(h.platform_commission_rate||0); const commission=Number((total*commissionRate/100).toFixed(2)); const net=Number((total-commission).toFixed(2)); const code='AQH-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
@@ -634,41 +634,8 @@ async function moyasarFetchPayment(providerPaymentId){
 }
 function newFinanceInvoiceNo(){ return `AQ-F-${new Date().getFullYear()}-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`; }
 
-async function finalizePaidPayment(paymentId, providerPaymentId, providerPayload=null){
-  const client=await pool.connect();
-  try{
-    await client.query('BEGIN');
-    const pay=(await client.query(`SELECT p.*,o.owner_id FROM payments p LEFT JOIN offices o ON o.id=p.office_id WHERE p.id=$1 FOR UPDATE`,[paymentId])).rows[0];
-    if(!pay) throw new Error('payment_missing'); if(pay.status==='paid'){await client.query('COMMIT');return {ok:true,status:'paid',already:true};}
-    if(providerPaymentId){const d=(await client.query(`SELECT id FROM payments WHERE provider=$1 AND provider_payment_id=$2 AND id<>$3 LIMIT 1`,[pay.provider,providerPaymentId,pay.id])).rows[0];if(d)throw new Error('provider_payment_already_used');}
-    const meta=pay.metadata||{};
-    if(meta.kind==='wallet_topup'){
-      await client.query(`INSERT INTO office_wallets(office_id,currency) VALUES($1,$2) ON CONFLICT (office_id) DO NOTHING`,[pay.office_id,pay.currency]);
-      const w=(await client.query(`SELECT * FROM office_wallets WHERE office_id=$1 FOR UPDATE`,[pay.office_id])).rows[0]; if(String(w.currency)!==String(pay.currency))throw new Error('wallet_currency_mismatch');
-      const balance=Number(w.balance)+Number(pay.amount); const nw=(await client.query(`UPDATE office_wallets SET balance=$1,updated_at=NOW() WHERE office_id=$2 RETURNING balance`,[balance,pay.office_id])).rows[0];
-      await client.query(`UPDATE payments SET status='paid',paid_at=NOW(),provider_payment_id=COALESCE($2,provider_payment_id),invoice_no=COALESCE(invoice_no,$4),review_status=CASE WHEN review_status='pending' THEN 'approved' ELSE review_status END,reviewed_at=CASE WHEN review_status='pending' THEN NOW() ELSE reviewed_at END,metadata=metadata||$3::jsonb WHERE id=$1`,[pay.id,providerPaymentId||null,JSON.stringify(providerPayload?{provider_verified:true}:{}),newFinanceInvoiceNo()]);
-      await client.query(`INSERT INTO wallet_transactions(office_id,type,amount,balance_after,payment_id,description,metadata) VALUES($1,'topup',$2,$3,$4,'شحن المحفظة الإعلانية',$5)`,[pay.office_id,pay.amount,nw.balance,pay.id,JSON.stringify({payment_id:pay.id,provider_payment_id:providerPaymentId||null})]);
-    } else if(meta.kind==='subscription'){
-      const plan=(await client.query('SELECT * FROM office_plans WHERE id=$1',[meta.plan_id])).rows[0];if(!plan)throw new Error('plan_missing');
-      await client.query(`UPDATE office_subscriptions SET status='cancelled',updated_at=NOW() WHERE office_id=$1 AND status='active'`,[pay.office_id]);
-      const days=plan.billing_period==='yearly'?365:plan.billing_period==='monthly'?30:3650;
-      const sub=(await client.query(`INSERT INTO office_subscriptions(office_id,plan_id,status,starts_at,ends_at,payment_provider) VALUES($1,$2,'active',NOW(),NOW()+($3||' days')::interval,$4) RETURNING id`,[pay.office_id,plan.id,days,pay.provider])).rows[0];
-      await client.query(`UPDATE payments SET status='paid',subscription_id=$1,paid_at=NOW(),provider_payment_id=COALESCE($2,provider_payment_id),invoice_no=COALESCE(invoice_no,$5),review_status=CASE WHEN review_status='pending' THEN 'approved' ELSE review_status END,reviewed_at=CASE WHEN review_status='pending' THEN NOW() ELSE reviewed_at END,metadata=metadata||$3::jsonb WHERE id=$4`,[sub.id,providerPaymentId||null,JSON.stringify(providerPayload?{provider_verified:true}:{}),pay.id,newFinanceInvoiceNo()]);
-    }
-    await client.query('COMMIT'); return {ok:true,status:'paid'};
-  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
-}
-async function shamCashFindTransaction(tx){
-  if(!process.env.SHAM_CASH_API_KEY || !process.env.SHAM_CASH_ACCOUNT_ADDRESS) throw new Error('SHAM_CASH_NOT_CONFIGURED');
-  const base=String(process.env.SHAM_CASH_API_BASE_URL||'https://tsa-api.com/api/v1').replace(/\/$/,'');
-  const url=new URL(base);
-  url.searchParams.set('resource','shamcash'); url.searchParams.set('action','find_tx');
-  url.searchParams.set('tx',String(tx)); url.searchParams.set('account_address',String(process.env.SHAM_CASH_ACCOUNT_ADDRESS));
-  const r=await fetch(url,{headers:{'X-Api-Key':process.env.SHAM_CASH_API_KEY,'Accept':'application/json'}});
-  const body=await r.json().catch(()=>({}));
-  if(!r.ok || body.success===false) throw new Error(body.error||`Sham Cash HTTP ${r.status}`);
-  return body;
-}
+const finalizePaidPayment = require('./payment-settlement')({pool, newFinanceInvoiceNo});
+const shamCash = require('./shamcash');
 
 const FX_CACHE_TTL_MS=Number(process.env.FX_CACHE_TTL_MS||3600000);
 const FX_PROVIDER_URL=String(process.env.FX_PROVIDER_URL||'https://open.er-api.com/v6/latest/USD');
@@ -709,7 +676,7 @@ app.get('/api/fx/convert', async(req,res)=>{try{const amount=Number(req.query.am
 const COUNTRY_CURRENCY={SY:'SYP',SA:'SAR',AE:'AED',KW:'KWD',QA:'QAR',BH:'BHD',OM:'OMR',JO:'JOD',US:'USD',CA:'CAD',GB:'GBP',AU:'AUD',JP:'JPY',CH:'CHF',SG:'SGD',DE:'EUR',FR:'EUR',IT:'EUR',ES:'EUR',NL:'EUR',BE:'EUR',AT:'EUR',IE:'EUR'};
 const CURRENCY_META={SYP:{name:'الليرة السورية',countries:['SY']},SAR:{name:'الريال السعودي',countries:['SA']},AED:{name:'الدرهم الإماراتي',countries:['AE']},KWD:{name:'الدينار الكويتي',countries:['KW']},QAR:{name:'الريال القطري',countries:['QA']},BHD:{name:'الدينار البحريني',countries:['BH']},OMR:{name:'الريال العماني',countries:['OM']},JOD:{name:'الدينار الأردني',countries:['JO']},USD:{name:'الدولار الأمريكي',countries:['US']},CAD:{name:'الدولار الكندي',countries:['CA']},GBP:{name:'الجنيه الإسترليني',countries:['GB']},AUD:{name:'الدولار الأسترالي',countries:['AU']},JPY:{name:'الين الياباني',countries:['JP']},CHF:{name:'الفرنك السويسري',countries:['CH']},SGD:{name:'الدولار السنغافوري',countries:['SG']},EUR:{name:'اليورو',countries:['DE','FR','IT','ES','NL','BE','AT','IE']}};
 function supportedGlobalCurrency(currency){ return ['USD','EUR','GBP','SAR','AED','CAD','AUD','JPY','CHF','SGD','KWD','QAR','BHD','OMR','JOD'].includes(String(currency||'').toUpperCase()); }
-function configuredProvider(provider){const x=String(provider||'').toLowerCase(); if(x==='stripe')return !!process.env.STRIPE_SECRET_KEY; if(x==='paypal')return !!(process.env.PAYPAL_CLIENT_ID&&process.env.PAYPAL_CLIENT_SECRET); if(x==='moyasar')return !!process.env.MOYASAR_PUBLISHABLE_KEY; if(x==='shamcash')return !!(process.env.SHAM_CASH_API_KEY&&process.env.SHAM_CASH_ACCOUNT_ADDRESS); if(x==='syriatel_cash')return !!process.env.SYRIATEL_CASH_ACCOUNT; return x==='mock' && !isProduction;}
+function configuredProvider(provider){const x=String(provider||'').toLowerCase(); if(x==='stripe')return !!process.env.STRIPE_SECRET_KEY; if(x==='paypal')return !!(process.env.PAYPAL_CLIENT_ID&&process.env.PAYPAL_CLIENT_SECRET); if(x==='moyasar')return !!process.env.MOYASAR_PUBLISHABLE_KEY; if(x==='shamcash')return shamCash.isConfigured(); if(x==='syriatel_cash')return !!process.env.SYRIATEL_CASH_ACCOUNT; return x==='mock' && !isProduction;}
 function paymentOptions(country,currency){
   const cc=String(country||'').toUpperCase(); const cur=String(currency||COUNTRY_CURRENCY[cc]||'USD').toUpperCase(); const out=[];
   const add=(id,name,icon,why)=>{if(configuredProvider(id))out.push({id,name,icon,reason:why});};
@@ -781,7 +748,7 @@ async function createProviderCheckout(req,payment){
   }
   if(provider==='shamcash'){
     if(String(payment.currency).toUpperCase()!=='SYP') throw new Error('SHAM_CASH_REQUIRES_SYP');
-    if(!process.env.SHAM_CASH_API_KEY || !process.env.SHAM_CASH_ACCOUNT_ADDRESS) throw new Error('SHAM_CASH_NOT_CONFIGURED');
+    if(!shamCash.isConfigured()) throw new Error('SHAM_CASH_NOT_CONFIGURED');
     await pool.query(`UPDATE payments SET checkout_url=$1 WHERE id=$2`,[checkout,payment.id]);
     return {payment_id:payment.id,checkout_url:checkout,mode:'shamcash',recipient:process.env.SHAM_CASH_ACCOUNT_ADDRESS,label:process.env.SHAM_CASH_RECIPIENT_LABEL||'عقارتكم',currency:'SYP'};
   }
@@ -804,6 +771,7 @@ app.get('/api/checkout/:id/config', requireAuth, async(req,res)=>{
     if(String(p.provider)==='stripe')return res.json({provider:'stripe',amount:p.amount,currency:p.currency,checkout_url:p.checkout_url,session_id:p.provider_payment_id});
     if(String(p.provider)==='paypal')return res.json({provider:'paypal',amount:p.amount,currency:p.currency,checkout_url:p.checkout_url,order_id:p.provider_payment_id});
     if(String(p.provider)==='syriatel_cash')return res.json({provider:'syriatel_cash',amount:p.amount,currency:p.currency,recipient:process.env.SYRIATEL_CASH_ACCOUNT||'',label:process.env.SYRIATEL_CASH_RECIPIENT_LABEL||'عقارتكم',instructions:'حوّل المبلغ إلى حساب عقارتكم في سيرياتيل كاش، ثم أدخل رقم العملية لإرسالها للمراجعة.'});
+    if(String(p.provider)==='shamcash' && !shamCash.isConfigured())return res.status(503).json({error:'الدفع عبر شام كاش غير مفعّل حالياً. لا تحوّل أي مبلغ.'});
     if(String(p.provider)==='shamcash')return res.json({provider:'shamcash',amount:p.amount,currency:p.currency,recipient:process.env.SHAM_CASH_ACCOUNT_ADDRESS,label:process.env.SHAM_CASH_RECIPIENT_LABEL||'عقارتكم',instructions:'حوّل المبلغ إلى حساب عقارتكم في شام كاش، ثم أدخل رقم العملية الظاهر في تطبيق شام كاش للتحقق التلقائي.'});
     res.json({provider:'mock',amount:p.amount,currency:p.currency});
   }catch(e){res.status(500).json({error:'تعذر تحميل إعدادات الدفع'});}
@@ -819,24 +787,7 @@ app.post('/api/checkout/:id/syriatel/submit', requireAuth, async(req,res)=>{
     res.json({ok:true,status:'pending',message:'تم إرسال العملية للمراجعة. سيتم إضافة الرصيد بعد اعتماد الإدارة.'});
   }catch(e){console.error(e);res.status(500).json({error:'تعذر إرسال العملية للمراجعة'});}
 });
-app.post('/api/checkout/:id/shamcash/verify', requireAuth, async(req,res)=>{
-  try{
-    const r=await pool.query(`SELECT p.*,o.owner_id FROM payments p LEFT JOIN offices o ON o.id=p.office_id WHERE p.id=$1 AND (p.user_id=$2 OR o.owner_id=$2)`,[req.params.id,req.user.id]);
-    const local=r.rows[0]; if(!local)return res.status(404).json({error:'عملية الدفع غير موجودة'});
-    if(local.status==='paid')return res.json({ok:true,status:'paid',already:true});
-    if(local.provider!=='shamcash')return res.status(400).json({error:'عملية الدفع ليست عبر شام كاش'});
-    const tx=String(req.body.transaction_id||'').trim();
-    if(!/^\d{3,30}$/.test(tx))return res.status(400).json({error:'أدخل رقم عملية شام كاش الصحيح'});
-    const remote=await shamCashFindTransaction(tx);
-    const t=remote?.data?.transaction;
-    if(!remote?.data?.found || !t)return res.json({ok:false,status:'not_found',message:'لم يتم العثور على العملية بعد. تأكد من رقم العملية ثم حاول مجدداً.'});
-    const amount=Number(t.amount), currency=String(t.currency||'').toUpperCase();
-    if(amount!==Number(local.amount) || currency!==String(local.currency).toUpperCase())return res.status(400).json({error:'المبلغ أو العملة لا تطابق عملية الشحن المطلوبة'});
-    const expected=String(process.env.SHAM_CASH_ACCOUNT_ADDRESS||'');
-    if(expected && t.to_address && String(t.to_address)!==expected)return res.status(400).json({error:'التحويل ليس إلى حساب عقارتكم'});
-    return res.json(await finalizePaidPayment(local.id,tx,t));
-  }catch(e){console.error(e);res.status(500).json({error:e.message==='SHAM_CASH_NOT_CONFIGURED'?'تكامل شام كاش غير مهيأ على الخادم.':'تعذر التحقق من عملية شام كاش'});}
-});
+shamCash.register(app, {pool, requireAuth, finalizePaidPayment});
 async function stripeRetrieveSession(sessionId){
   if(!process.env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY_missing');
   const r=await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,{headers:{Authorization:`Bearer ${process.env.STRIPE_SECRET_KEY}`}});
