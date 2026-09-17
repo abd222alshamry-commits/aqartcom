@@ -1,0 +1,11 @@
+# Hotel ownership and limited administrators
+
+The configured ADMIN_EMAIL account remains a full administrator (admin_permissions=NULL). Existing full administrators retain their access. A limited administrator is an admin with an explicit JSON array, including an empty array for no admin permissions. Unknown permission names and unassigned routes are denied. Admin permissions are read from the database on each authenticated request, so edits apply to existing sessions. The existing session login is required throughout.
+
+Full administrators can create limited accounts at /admin-team.html, edit their grants and disable them. Creating an account never overwrites or promotes an existing email. The owner, the acting account, and full administrators cannot be reduced using the limited-team endpoint. Changes are recorded atomically in admin_access_events. Financial writes and management of administrators cannot be delegated by the current catalog.
+
+Hotel management at /hotel-partner.html supports adding hotels and rooms, uploading images/videos for both, removing media from display, and publishing/unpublishing hotels for administrators. Partners retain existing ownership checks. Upload authorization runs before file handling; extensions, MIME types and signatures are checked. Video previews use FFmpeg. Limits are 12 images at 8 MiB each and 3 videos at 100 MiB each per hotel or room, enforced transactionally when appending. Removing displayed media does not delete physical files to avoid breaking existing references; disk cleanup is not part of this release.
+
+Public hotel and room details display the stored images and videos. This release updates the website/backend. Native Android's existing partner dashboard opens the website for editing; its native public hotel gallery is not extended by this release.
+
+Local integration coverage uses Express and PGlite with test-only injected identities: full admin access without an office, partner isolation, read-only write denial, staff creation/edit/owner protection and audit, upload denial before disk write, signature/extension validation, actual MP4/poster generation, room storage, deletion, and publication. No production hotel, staff account or uploaded media is created by the tests. Visual authenticated device testing is not claimed.

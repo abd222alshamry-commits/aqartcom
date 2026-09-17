@@ -91,14 +91,14 @@ async function getCurrentUser(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
   if (!token) return null;
   const result = await pool.query(`
-    SELECT u.id, u.name, u.email, u.phone, u.role, u.is_active, u.created_at, u.office_id, u.office_title
+    SELECT u.id, u.name, u.email, u.phone, u.role, u.admin_permissions, u.is_active, u.created_at, u.office_id, u.office_title
     FROM sessions s JOIN users u ON u.id=s.user_id
     WHERE s.token_hash=$1 AND s.expires_at > NOW() AND u.is_active=TRUE
   `, [tokenHash(token)]);
   return result.rows[0] || null;
 }
 
-async function requireAdmin(req,res,next){ try { const user=await getCurrentUser(req); if(!user) return res.status(401).json({error:'يجب تسجيل الدخول أولاً'}); if(user.role!=='admin') return res.status(403).json({error:'ليس لديك صلاحية الإدارة'}); req.user=user; next(); } catch(e){ console.error(e); res.status(500).json({error:'تعذر التحقق من صلاحيات الإدارة'}); } }
+async function requireAdmin(req,res,next){ try { const user=await getCurrentUser(req); if(!user) return res.status(401).json({error:'يجب تسجيل الدخول أولاً'}); if(user.role!=='admin') return res.status(403).json({error:'ليس لديك صلاحية الإدارة'}); if(!require('./admin-permissions').allowed(user,req))return res.status(403).json({error:'هذا الإجراء خارج الصلاحيات الممنوحة لحسابك'}); req.user=user; next(); } catch(e){ console.error(e); res.status(500).json({error:'تعذر التحقق من صلاحيات الإدارة'}); } }
 
 async function requireAuth(req, res, next) {
   try {
@@ -117,7 +117,7 @@ async function ensureAdminFromEnv(){
   if(!email)return;
   const existing=(await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1)',[email])).rows[0];
   if(existing){
-    await pool.query("UPDATE users SET role='admin',is_active=TRUE,updated_at=NOW() WHERE id=$1",[existing.id]);
+    await pool.query("UPDATE users SET role='admin',admin_permissions=NULL,is_active=TRUE,updated_at=NOW() WHERE id=$1",[existing.id]);
     console.log('Owner admin ready:',email,'existing account');
     return;
   }
@@ -139,6 +139,7 @@ async function requireOffice(req,res,next){
     const user=await getCurrentUser(req);
     if(!user) return res.status(401).json({error:'يجب تسجيل الدخول أولاً'});
     if(!['agent','admin'].includes(user.role)) return res.status(403).json({error:'نظام المكاتب متاح للحسابات العقارية فقط'});
+    if(user.role==='admin' && !require('./admin-permissions').full(user))return res.status(403).json({error:'هذا القسم خارج صلاحيات حساب الإدارة المحدود'});
     req.user=user; next();
   } catch(e){ console.error(e); res.status(500).json({error:'تعذر التحقق من صلاحيات المكتب'}); }
 }
@@ -150,6 +151,7 @@ async function requireOfficeMember(req,res,next){
   try {
     const user=await getCurrentUser(req); if(!user) return res.status(401).json({error:'يجب تسجيل الدخول أولاً'});
     if(!['agent','admin'].includes(user.role)) return res.status(403).json({error:'صلاحية المكتب غير متاحة لهذا الحساب'});
+    if(user.role==='admin' && !require('./admin-permissions').allowed(user,req))return res.status(403).json({error:'هذا الإجراء خارج الصلاحيات الممنوحة لحسابك'});
     // Platform administrators manage hotels globally; partner accounts remain office-scoped.
     if(user.role==='admin' && /^\/api\/office\/hotels?(?:[-/]|$)/.test(req.path)) {
       req.user=user; req.office={id:null,owner_id:user.id,platform_admin:true}; return next();
@@ -312,6 +314,8 @@ require('./mobile-hotels').register(app,{pool,getCurrentUser,syncHotel,manualPay
 const qrUpload=multer({storage,limits:{fileSize:2*1024*1024},fileFilter:(_req,file,cb)=>cb(null,/^image\/(jpeg|png|webp)$/.test(file.mimetype))}).single('qr');
 hotelManualPayments.register(app,{pool,requireAdmin,syncHotel,receiveQr:(req,res,next)=>qrUpload(req,res,error=>error?res.status(400).json({error:'تعذر رفع رمز QR. اختر صورة بحجم أقل من 2 ميغابايت.'}):next())});
 require('./demo-hotels').register(app, { pool, requireAdmin });
+require('./admin-permissions').register(app,{pool,requireAdmin,bcrypt,ownerEmail:process.env.ADMIN_EMAIL});
+require('./hotel-media').register(app,{pool,requireOfficeMember,ownedHotel,uploadDir,createVideoPoster});
 
 app.get('/api/office/hotels',requireOfficeMember,async(req,res)=>{try{const hs=(await pool.query(`SELECT h.*,(SELECT COUNT(*) FROM hotel_rooms r WHERE r.hotel_id=h.id)::int room_types,(SELECT COUNT(*) FROM hotel_bookings b WHERE b.hotel_id=h.id AND b.status IN ('pending','confirmed'))::int open_bookings FROM hotels h WHERE (h.office_id=$1 OR h.owner_id=$2 OR $3::boolean) ORDER BY h.created_at DESC`,[req.office.id,req.office.owner_id,req.office.platform_admin===true])).rows;res.json({data:hs});}catch(e){res.status(500).json({error:'تعذر تحميل فنادق المكتب'});}});
 app.post('/api/office/hotels',requireOfficeMember,async(req,res)=>{try{const b=req.body||{};if(!b.name||!b.city)return res.status(400).json({error:'اسم الفندق والمدينة مطلوبان'});let slug=String(b.slug||b.name).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,220)||('hotel-'+Date.now());let base=slug,n=2;while((await pool.query('SELECT 1 FROM hotels WHERE slug=$1',[slug])).rows[0])slug=base+'-'+n++;const r=await pool.query(`INSERT INTO hotels(office_id,owner_id,name,slug,city,district,address,description,star_rating,latitude,longitude,amenities,images,check_in_time,check_out_time,cancellation_policy,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending') RETURNING *`,[req.office.id,req.office.owner_id,b.name,slug,b.city,b.district||null,b.address||null,b.description||null,Number(b.star_rating)||0,b.latitude||null,b.longitude||null,JSON.stringify(b.amenities||[]),JSON.stringify(b.images||[]),b.check_in_time||'14:00',b.check_out_time||'12:00',b.cancellation_policy||null]);res.status(201).json({data:r.rows[0]});}catch(e){console.error(e);res.status(500).json({error:'تعذر إنشاء الفندق'});}});
@@ -1321,7 +1325,7 @@ app.get('/api/admin/overview', requireAdmin, async (_req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'تعذر تحميل إحصائيات الإدارة'});}
 });
 app.get('/api/admin/users', requireAdmin, async (req,res)=>{ const q=String(req.query.q||'').trim(); const vals=[]; let where=''; if(q){vals.push(`%${q}%`);where='WHERE name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1';} const r=await pool.query(`SELECT id,name,email,phone,role,is_active,created_at,(SELECT COUNT(*) FROM properties p WHERE p.owner_id=users.id)::int AS properties_count FROM users ${where} ORDER BY created_at DESC LIMIT 200`,vals); res.json({data:r.rows}); });
-app.patch('/api/admin/users/:id', requireAdmin, async (req,res)=>{ const role=String(req.body.role||''); const active=typeof req.body.is_active==='boolean'?req.body.is_active:null; if(role && !['user','agent','admin'].includes(role)) return res.status(400).json({error:'الدور غير صحيح'}); const r=await pool.query(`UPDATE users SET role=COALESCE($1,role), is_active=COALESCE($2,is_active), updated_at=NOW() WHERE id=$3 RETURNING id,name,email,phone,role,is_active,created_at`,[role||null,active,req.params.id]); if(!r.rows[0])return res.status(404).json({error:'المستخدم غير موجود'}); res.json({data:r.rows[0]}); });
+app.patch('/api/admin/users/:id', requireAdmin, async (req,res)=>{ if(String(req.params.id)===String(req.user.id))return res.status(403).json({error:'لا يمكن تغيير صلاحيات حسابك من هنا'}); const target=(await pool.query('SELECT email FROM users WHERE id=$1',[req.params.id])).rows[0];if(target && normalizeEmail(target.email)===normalizeEmail(process.env.ADMIN_EMAIL))return res.status(403).json({error:'حساب المالك محمي'}); const role=String(req.body.role||''); const active=typeof req.body.is_active==='boolean'?req.body.is_active:null; if(role && !['user','agent','admin'].includes(role)) return res.status(400).json({error:'الدور غير صحيح'}); const r=await pool.query(`UPDATE users SET role=COALESCE($1,role), is_active=COALESCE($2,is_active), updated_at=NOW() WHERE id=$3 RETURNING id,name,email,phone,role,is_active,created_at`,[role||null,active,req.params.id]); if(!r.rows[0])return res.status(404).json({error:'المستخدم غير موجود'}); res.json({data:r.rows[0]}); });
 app.get('/api/admin/properties', requireAdmin, async (req,res)=>{ const q=String(req.query.q||'').trim(); const status=String(req.query.status||'').trim(); const vals=[]; const where=[]; if(q){vals.push(`%${q}%`);where.push(`(p.title ILIKE $${vals.length} OR p.city ILIKE $${vals.length} OR p.district ILIKE $${vals.length})`)} if(status){vals.push(status);where.push(`p.status=$${vals.length}`)} const r=await pool.query(`SELECT p.*,u.name owner_name,u.phone owner_phone,(SELECT COUNT(*) FROM inquiries i WHERE i.property_id=p.id)::int inquiry_count FROM properties p LEFT JOIN users u ON u.id=p.owner_id ${where.length?'WHERE '+where.join(' AND '):''} ORDER BY p.created_at DESC LIMIT 300`,vals);res.json({data:r.rows}); });
 app.patch('/api/admin/properties/:id', requireAdmin, async (req,res)=>{ const status=req.body.status; const featured=req.body.featured; if(status!==undefined&&!['pending','active','rejected'].includes(status))return res.status(400).json({error:'حالة الإعلان غير صحيحة'}); const r=await pool.query(`UPDATE properties SET status=COALESCE($1,status), featured=COALESCE($2,featured) WHERE id=$3 RETURNING *`,[status===undefined?null:status,featured===undefined?null:Boolean(featured),req.params.id]);if(!r.rows[0])return res.status(404).json({error:'العقار غير موجود'});res.json({data:r.rows[0]}); });
 app.delete('/api/admin/properties/:id', requireAdmin, async (req,res)=>{ const r=await pool.query('DELETE FROM properties WHERE id=$1 RETURNING id',[req.params.id]);if(!r.rows[0])return res.status(404).json({error:'العقار غير موجود'});res.json({ok:true}); });

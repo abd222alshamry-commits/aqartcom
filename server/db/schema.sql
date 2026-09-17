@@ -1249,3 +1249,12 @@ CREATE TABLE IF NOT EXISTS hotel_manual_payments (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_shamcash_reference ON hotel_manual_payments(transaction_reference)
  WHERE transaction_reference IS NOT NULL AND status IN ('pending_review','approved');
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_permissions JSONB;
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS videos JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE hotel_rooms ADD COLUMN IF NOT EXISTS videos JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS admin_access_events (
+ id BIGSERIAL PRIMARY KEY, actor_user_id BIGINT REFERENCES users(id), target_user_id BIGINT REFERENCES users(id),
+ permissions JSONB NOT NULL, is_active BOOLEAN NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
