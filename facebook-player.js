@@ -34,7 +34,7 @@
     widget.setAttribute('data-href', url);
     widget.setAttribute('data-width', '500');
     widget.setAttribute('data-allowfullscreen', 'true');
-    widget.setAttribute('data-autoplay', 'false');
+    widget.setAttribute('data-autoplay', 'true');
     widget.setAttribute('data-show-text', 'false');
     host.append(widget); stage.append(host);
     function fit() {
@@ -73,14 +73,14 @@
         api.Event.unsubscribe('xfbml.ready', readyHandler);
         readyHandler = null;
         player = message.instance;
-        subscriptions.push(player.subscribe('startedPlaying', () => {
+        subscriptions.push(['startedPlaying', player.subscribe('startedPlaying', () => {
           if (disposed) return;
           // Some provider versions apply a default mute when playback starts.
           // Correct it once, then respect subsequent user mute/volume choices.
           if (!didStart) { didStart = true; player.unmute(); player.setVolume(1); }
           onPlaying();
-        }));
-        subscriptions.push(player.subscribe('error', fail));
+        })]);
+        subscriptions.push(['error', player.subscribe('error', fail)]);
         fit(); onReady(); playWithSound();
       };
       api.Event.subscribe('xfbml.ready', readyHandler);
@@ -93,7 +93,7 @@
         if (disposed) return;
         disposed = true; clearTimeout(timer);
         if (api && readyHandler) api.Event.unsubscribe('xfbml.ready', readyHandler);
-        subscriptions.forEach(subscription => { try { subscription.release(); } catch (_) {} });
+        subscriptions.forEach(([event, subscription]) => { try { subscription.release(event); } catch (_) {} });
         try { player?.pause(); } catch (_) {}
         observer.disconnect(); resize?.disconnect(); window.removeEventListener('resize', fit);
         host.querySelectorAll('iframe').forEach(frame => { frame.src = 'about:blank'; });
