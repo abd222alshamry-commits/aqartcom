@@ -18,3 +18,5 @@ mobile/android-native/app/build/
 
 qa/results.json
 qa/*.log
+
+qa/windows-results.json

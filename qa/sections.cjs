@@ -17,8 +17,8 @@ const root=path.resolve(__dirname,'..');
  await query("INSERT INTO offices(owner_id,name,slug) VALUES($1,'QA Office','qa-office')",[user.id]);
  await query("UPDATE users SET office_id=1 WHERE id=$1",[user.id]);
  await query("INSERT INTO properties(owner_id,office_id,title,type,mode,city,price,area,latitude,longitude) VALUES($1,1,'QA Property','شقة','بيع','دمشق',100000,100,33.5,36.3),($1,1,'QA Property 2','شقة','بيع','دمشق',120000,120,33.51,36.31)",[user.id]);
- await query("INSERT INTO hotels(owner_id,office_id,name,slug,city,status) VALUES($1,1,'QA Hotel','qa-hotel','دمشق','active')",[user.id]);
- await query("INSERT INTO hotel_rooms(hotel_id,name,room_type,price) VALUES(1,'QA Room','double',100)");
+ const hotelId=(await query("INSERT INTO hotels(owner_id,office_id,name,slug,city,status) VALUES($1,1,'QA Hotel','qa-hotel','دمشق','active') RETURNING id",[user.id])).rows[0].id;
+ const roomId=(await query("INSERT INTO hotel_rooms(hotel_id,name,room_type,price) VALUES($1,'QA Room','double',100) RETURNING id",[hotelId])).rows[0].id;
  const token='qa-session-token',hash=require('crypto').createHash('sha256').update(token).digest('hex');await query("INSERT INTO sessions(user_id,token_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '1 day')",[user.id,hash]);
  const srv=require('http').createServer(app);await new Promise(r=>srv.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+srv.address().port;
  const headers={cookie:'aqartkom_session='+token,'content-type':'application/json'};
@@ -29,8 +29,8 @@ const root=path.resolve(__dirname,'..');
 
  const assert=require('node:assert/strict');
  async function post(p,body){const r=await fetch(base+p,{method:'POST',headers,body:JSON.stringify(body)});const text=await r.text();results.push({path:p,status:r.status,body:text.slice(0,500)});assert.ok(r.ok,p+': '+text);return JSON.parse(text)}
- await query('UPDATE hotels SET platform_commission_rate=10 WHERE id=1');
- const booking=await post('/api/hotels/book',{hotel_id:1,room_id:1,guest_name:'QA Guest',guest_phone:'000000000',guest_email:'guest@example.test',check_in:'2099-01-01',check_out:'2099-01-03'});
+ await query('UPDATE hotels SET platform_commission_rate=10 WHERE id=$1',[hotelId]);
+ const booking=await post('/api/hotels/book',{hotel_id:hotelId,room_id:roomId,guest_name:'QA Guest',guest_phone:'000000000',guest_email:'guest@example.test',check_in:'2099-01-01',check_out:'2099-01-03'});
  assert.equal(Number(booking.data.total),200);
  const invoices=await post('/api/admin/einvoices/auto-generate',{});assert.equal(invoices.data.created,1);assert.equal(invoices.data.error_count,0);
  const repeat=await post('/api/admin/einvoices/auto-generate',{});assert.equal(repeat.data.created,0);
