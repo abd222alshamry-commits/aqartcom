@@ -11,7 +11,7 @@
       const parts = url.pathname.split('/').filter(Boolean);
       const id = host.endsWith('youtu.be') ? parts[0] : url.searchParams.get('v') || (['embed','shorts','live'].includes(parts[0]) ? parts[1] : '');
       if (!/^[a-zA-Z0-9_-]{11}$/.test(id || '')) return {type:'external', url:url.href};
-      return {type:'youtube', url:`https://www.youtube.com/watch?v=${id}`, embed:`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1`, poster:`https://i.ytimg.com/vi/${id}/hqdefault.jpg`};
+      return {type:'youtube', url:`https://www.youtube.com/watch?v=${id}`, embed:`https://www.youtube-nocookie.com/embed/${id}?autoplay=0&rel=0&playsinline=1`, poster:`https://i.ytimg.com/vi/${id}/hqdefault.jpg`};
     }
     if (['facebook.com','www.facebook.com','m.facebook.com','web.facebook.com'].includes(host)) {
       const match = url.pathname.match(/\/(?:videos|reel)\/(?:[^/]+\/)?(\d+)\/?$/);
@@ -22,6 +22,10 @@
         // viewer press Facebook's play control so playback can begin with sound.
         return {type:'facebook', url:source, embed:`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(source)}&show_text=false&autoplay=false&mute=false&allowfullscreen=true`};
       }
+    }
+    if (['tiktok.com','www.tiktok.com','m.tiktok.com'].includes(host)) {
+      const id = url.pathname.match(/^\/@[^/]+\/video\/(\d+)\/?$/)?.[1];
+      if (id) return {type:'tiktok', url:url.href, embed:`https://www.tiktok.com/player/v1/${id}?autoplay=0&controls=1&muted=0`};
     }
     return {type:/\.(mp4|webm|mov|m4v|ogv)$/i.test(url.pathname) ? 'file' : 'external', url:url.href};
   }
@@ -44,13 +48,13 @@
     viewer.setAttribute('aria-modal', 'true');
     viewer.setAttribute('aria-labelledby', 'videoViewerTitle');
     viewer.setAttribute('dir', 'rtl');
-    const provider = {file:'فيديو العقار', youtube:'YouTube', facebook:'فيسبوك', external:'فيديو خارجي'}[source.type];
-    viewer.innerHTML = `<div class="video-viewer-header"><div><small>${provider}</small><h2 id="videoViewerTitle">${esc(video.title || 'جولة في العقار')}</h2></div><button type="button" class="video-viewer-close" aria-label="إغلاق الفيديو" title="إغلاق الفيديو">✕</button></div><div class="video-viewer-stage"></div><div class="video-viewer-footer"><div class="video-viewer-tools"></div><a class="video-viewer-source" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${source.type === 'file' ? 'فتح الفيديو مباشرة' : 'فتح الفيديو الأصلي'} ↗</a></div>`;
+    const provider = {file:'فيديو العقار', youtube:'YouTube', facebook:'فيسبوك', tiktok:'تيك توك', external:'فيديو خارجي'}[source.type];
+    viewer.innerHTML = `<div class="video-viewer-header"><div><small>${provider}</small><h2 id="videoViewerTitle">${esc(video.title || 'جولة في العقار')}</h2></div><button type="button" class="video-viewer-close" aria-label="إغلاق الفيديو" title="إغلاق الفيديو">✕</button></div><div class="video-viewer-stage"></div><div class="video-viewer-footer"><div class="video-viewer-tools"></div><button type="button" class="video-viewer-return">العودة إلى الإعلان</button></div>`;
     document.body.append(viewer);
     const stage = viewer.querySelector('.video-viewer-stage');
     const tools = viewer.querySelector('.video-viewer-tools');
     const closeButton = viewer.querySelector('.video-viewer-close');
-    let media = null, frameObserver = null, facebookController = null, playbackTimer = null, closed = false, enteredFullscreen = false, historyAdded = false;
+    let media = null, frameObserver = null, closed = false, enteredFullscreen = false, historyAdded = false;
     const historyKey = 'video-' + Date.now();
     const inertElements = Array.from(document.body.children).filter(el => el !== viewer).map(el => [el, el.inert]);
     inertElements.forEach(([el]) => { el.inert = true; });
@@ -64,8 +68,6 @@
       document.removeEventListener('fullscreenchange', onFullscreen);
       document.removeEventListener('webkitfullscreenchange', onFullscreen);
       window.removeEventListener('pagehide', onHide);
-      clearTimeout(playbackTimer);
-      facebookController?.destroy();
       frameObserver?.disconnect();
       window.removeEventListener('resize', fitFrame);
       if (media?.tagName === 'VIDEO') {
@@ -73,8 +75,8 @@
         if (document.pictureInPictureElement === media) document.exitPictureInPicture?.().catch(() => {});
         media.removeAttribute('src'); media.load();
       } else if (media) { media.src = 'about:blank'; }
-      if (document.fullscreenElement === viewer) document.exitFullscreen?.().catch(() => {});
-      else if (document.webkitFullscreenElement === viewer) document.webkitExitFullscreen?.();
+      if (document.fullscreenElement && viewer.contains(document.fullscreenElement)) document.exitFullscreen?.().catch(() => {});
+      else if (document.webkitFullscreenElement && viewer.contains(document.webkitFullscreenElement)) document.webkitExitFullscreen?.();
       viewer.remove();
       inertElements.forEach(([el, wasInert]) => { el.inert = wasInert; });
       document.body.classList.remove('video-viewer-open');
@@ -85,8 +87,9 @@
     function onPop() { close(true); }
     function onHide() { close(true); }
     function onFullscreen() {
-      if (document.fullscreenElement === viewer || document.webkitFullscreenElement === viewer) enteredFullscreen = true;
-      else if (enteredFullscreen) close();
+      const fullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fullscreen && (fullscreen === viewer || viewer.contains(fullscreen))) enteredFullscreen = true;
+      else if (enteredFullscreen && !fullscreen) close();
     }
     function onKey(event) {
       if (event.key === 'Escape') { event.preventDefault(); close(); }
@@ -104,13 +107,14 @@
       } catch (_) {}
     }
     function fitFrame() {
-      if (!media || source.type !== 'facebook') return;
+      if (!media || !['facebook','tiktok'].includes(source.type)) return;
       // Facebook sizes its embedded reels by width; a wide iframe crops their controls.
       // A portrait-safe width also accommodates landscape clips without clipping.
       media.style.width = Math.max(1, Math.min(stage.clientWidth, stage.clientHeight * 9 / 16)) + 'px';
     }
     active = {close};
     closeButton.onclick = () => close();
+    viewer.querySelector('.video-viewer-return').onclick = () => close();
     window.addEventListener('popstate', onPop);
     window.addEventListener('pagehide', onHide);
     document.addEventListener('keydown', onKey, true);
@@ -134,7 +138,7 @@
       retry.onclick = play;
       media.addEventListener('playing', () => { status.hidden = true; retry.hidden = true; });
       media.addEventListener('waiting', () => { status.textContent = 'جاري التحميل…'; status.hidden = false; });
-      media.addEventListener('error', () => { status.hidden = false; status.textContent = 'تعذر تشغيل هذا الفيديو. جرّب رابط الفيديو المباشر أدناه.'; retry.hidden = true; });
+      media.addEventListener('error', () => { status.hidden = false; status.textContent = 'تعذر تشغيل هذا الفيديو. أغلق المشغّل وحاول مرة أخرى.'; retry.hidden = true; });
       tools.innerHTML = '<button type="button" data-seek="-10" aria-label="رجوع 10 ثوانٍ">↶ 10</button><label>السرعة <select aria-label="سرعة الفيديو"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button type="button" data-seek="10" aria-label="تقديم 10 ثوانٍ">10 ↷</button>';
       tools.querySelectorAll('[data-seek]').forEach(button => { button.onclick = () => { if (Number.isFinite(media.duration)) media.currentTime = Math.max(0, Math.min(media.duration, media.currentTime + Number(button.dataset.seek))); }; });
       tools.querySelector('select').onchange = event => { media.playbackRate = Number(event.target.value); };
@@ -146,54 +150,31 @@
         media.addEventListener('loadedmetadata', nativeFullscreen, {once:true});
         media.addEventListener('webkitendfullscreen', () => close(), {once:true});
       }
-    } else if (source.type === 'facebook' && window.FacebookPropertyPlayer) {
-      const status = document.createElement('p');
-      status.className = 'video-viewer-status'; status.setAttribute('role', 'status');
-      status.textContent = 'جاري تشغيل الفيديو…'; stage.append(status);
-      tools.textContent = 'تحكم بالصوت من رمز السماعة داخل الفيديو.';
-      requestFullscreen();
-      facebookController = window.FacebookPropertyPlayer.mount({
-        stage, url:source.url,
-        onReady() { if (!closed) { status.hidden = true; tools.textContent = 'اضغط ▶ داخل الفيديو للتشغيل بالصوت.'; } },
-        onPlaying() { status.hidden = true; tools.textContent = 'تحكم بالصوت من رمز السماعة داخل الفيديو.'; },
-        onError() {
-          if (closed) return;
-          clearTimeout(playbackTimer); facebookController?.destroy();
-          status.hidden = true;
-          const message = document.createElement('div'); message.className = 'video-viewer-message';
-          const explanation = document.createElement('p'); explanation.textContent = 'هذا الفيديو غير متاح للتشغيل داخل الموقع.';
-          const link = document.createElement('a'); link.className = 'video-viewer-source video-source-action';
-          link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'شاهد على فيسبوك ↗';
-          message.append(explanation, link); stage.append(message);
-          tools.textContent = 'يمكنك مشاهدة الفيديو من مصدره الأصلي.';
-        }
-      });
     } else if (source.embed) {
       media = document.createElement('iframe');
       media.title = video.title || 'فيديو العقار';
       media.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
       media.allowFullscreen = true;
       media.referrerPolicy = 'strict-origin-when-cross-origin';
+      // Provider controls may play media, but cannot open apps/tabs or navigate this page.
+      media.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
       media.src = source.embed;
       stage.append(media);
-      if (source.type === 'facebook') {
+      if (['facebook','tiktok'].includes(source.type)) {
         fitFrame();
         if (window.ResizeObserver) { frameObserver = new ResizeObserver(fitFrame); frameObserver.observe(stage); }
         window.addEventListener('resize', fitFrame);
       }
-      tools.textContent = source.type === 'facebook'
-        ? 'اضغط ▶ داخل الفيديو للتشغيل بالصوت. إن كان مكتومًا، اضغط رمز السماعة.'
-        : 'إذا لم يتوفر الفيديو هنا، افتحه من المصدر.';
+      tools.textContent = 'اضغط ▶ داخل الفيديو للتشغيل. للإغلاق اضغط × أو زر الرجوع.';
       requestFullscreen();
     } else {
-      stage.innerHTML = '<p class="video-viewer-message">هذا المصدر لا يدعم التشغيل داخل الموقع. استخدم رابط الفيديو الأصلي.</p>';
+      stage.innerHTML = '<p class="video-viewer-message">هذا الرابط غير مدعوم في المشغّل الداخلي. اضغط «العودة إلى الإعلان» لإغلاق النافذة.</p>';
       requestFullscreen();
     }
     closeButton.focus({preventScroll:true});
   }
   window.PropertyVideo = {open, preview, resolveVideo};
   document.addEventListener('click', function (event) {
-    if (event.target.closest('[data-video-external]')) return;
     const trigger = event.target.closest('[data-property-video], a.marei-preview');
     if (!trigger || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     let video;

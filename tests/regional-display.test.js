@@ -93,11 +93,11 @@ test('regional cards preserve safe source links, display real dates and do not i
   }
   for(const platform of ['instagram','tiktok']){
     const html=card({...basic,platform,external_url:'https://www.'+platform+'.com/video/123',media_kind:'video'});
-    assert.ok(html.includes('data-video-external="true"'));assert.ok(html.includes('↗'));assert.ok(!html.includes('<img'));
+    assert.ok(html.includes('type="button" class="marei-preview"'));assert.ok(html.includes('data-property-video='));assert.ok(!html.includes('data-video-external'));assert.ok(html.includes('▶'));assert.ok(!html.includes('<img'));
   }
   const stored='/uploads/office-'+('f'.repeat(32));
   const html=card({...basic,platform:'tiktok',external_url:'https://www.tiktok.com/video/123',hosted_video:{url:stored+'.mp4',poster:stored+'.jpg',duration:65}});
-  assert.ok(html.includes('href="'+stored+'.mp4"'));assert.ok(html.includes('src="'+stored+'.jpg"'));assert.ok(html.includes('▶'));assert.ok(!html.includes('data-video-external'));
+  assert.ok(html.includes('&quot;url&quot;:&quot;'+stored+'.mp4&quot;'));assert.ok(html.includes('src="'+stored+'.jpg"'));assert.ok(html.includes('▶'));assert.ok(!html.includes('data-video-external'));
 });
 
 test('admin video upload accepts published regional ads and excludes pending and unrelated batches',async t=>{

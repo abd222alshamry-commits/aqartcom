@@ -16,7 +16,7 @@ test('YouTube watch, short, and embed URLs use the same safe video identifier', 
     const video = resolveVideo(url);
     assert.equal(video.type, 'youtube');
     assert.equal(new URL(video.embed).hostname, 'www.youtube-nocookie.com');
-    assert.equal(new URL(video.embed).searchParams.get('autoplay'), '1');
+    assert.equal(new URL(video.embed).searchParams.get('autoplay'), '0');
   }
 });
 test('Facebook embeds preserve video identity and wait for a play gesture to avoid autoplay muting', () => {
@@ -41,19 +41,90 @@ test('preview markup escapes advertiser-supplied titles and URLs', () => {
   assert.match(html, /data-property-video="\{&quot;/);
   assert.match(html, /type="button"/);
 });
-test('unavailable video source links retain normal browser navigation', () => {
-  let click, prevented = false, stopped = false;
-  const sourceLink = {dataset:{videoExternal:'true'}};
-  const document = {
-    addEventListener(name, handler) { if (name === 'click') click = handler; },
-    createElement() { assert.fail('A source link must not reopen the unavailable viewer'); }
+test('TikTok post links stay inside an embed that waits for the second tap', () => {
+  const result=resolveVideo('https://www.tiktok.com/@office/video/6718335390845095173');
+  assert.equal(result.type,'tiktok');
+  const url=new URL(result.embed);
+  assert.equal(url.pathname,'/player/v1/6718335390845095173');
+  assert.equal(url.searchParams.get('autoplay'),'0');
+  assert.equal(url.searchParams.get('muted'),'0');
+  assert.equal(resolveVideo('https://tiktok.com.evil.test/@office/video/123').type,'external');
+});
+
+test('legacy external video previews are intercepted instead of navigating off-site', () => {
+  let click,prevented=false,stopped=false,viewerRequested=false;
+  const sourceLink={dataset:{videoExternal:'true',videoTitle:'فيديو'},href:'https://external.example/video',hasAttribute(){return false;},getAttribute(){return 'فيديو';}};
+  const document={
+    addEventListener(name,handler){if(name==='click')click=handler;},
+    createElement(){viewerRequested=true;throw Error('viewer-requested');}
   };
-  vm.runInNewContext(fs.readFileSync(require.resolve('../video-player'), 'utf8'), {window:{}, document, URL});
-  click({
-    target:{closest(selector) { return selector === '[data-video-external]' ? sourceLink : null; }},
-    preventDefault() { prevented = true; },
-    stopPropagation() { stopped = true; }
-  });
-  assert.equal(prevented, false);
-  assert.equal(stopped, false);
+  vm.runInNewContext(fs.readFileSync(require.resolve('../video-player'),'utf8'),{window:{},document,URL,location:{href:'https://aqartcom-v93.onrender.com/'}});
+  assert.throws(()=>click({target:{closest(){return sourceLink;}},preventDefault(){prevented=true;},stopPropagation(){stopped=true;}}),/viewer-requested/);
+  assert.equal(prevented,true);assert.equal(stopped,true);assert.equal(viewerRequested,true);
+});
+
+function viewerHarness() {
+  function events(object={}) {
+    const listeners=new Map();
+    return Object.assign(object,{
+      addEventListener(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},
+      removeEventListener(type,fn){listeners.get(type)?.delete(fn);},
+      emit(type,event={}){for(const fn of [...(listeners.get(type)||[])])fn(event);}
+    });
+  }
+  function element(tag='div') {
+    const node=events({tagName:tag.toUpperCase(),attributes:{},children:[],style:{},inert:false,isConnected:true,clientWidth:390,clientHeight:600,
+      setAttribute(k,v){this.attributes[k]=v;},focus(){document.activeElement=this;},
+      append(...children){for(const child of children){this.children.push(child);child.parent=this;}},
+      remove(){this.isConnected=false;if(this.parent)this.parent.children=this.parent.children.filter(x=>x!==this);},
+      contains(child){return child===this||this.children.some(x=>x.contains(child));}
+    });
+    node.classList={values:new Set(),add(v){this.values.add(v);},remove(v){this.values.delete(v);}};
+    Object.defineProperty(node,'innerHTML',{get(){return this.html||'';},set(html){this.html=html;if(html.includes('video-viewer-header')){
+      this.parts={};for(const name of ['stage','tools','close','return']){const child=element(name==='close'||name==='return'?'button':'div');this.parts['.video-viewer-'+name]=child;this.append(child);}
+    }}});
+    node.querySelector=selector=>node.parts?.[selector]||null;
+    node.querySelectorAll=()=>[];
+    return node;
+  }
+  const document=events({createElement:element,fullscreenElement:null});
+  document.body=element('body');const page=element('main'),alreadyInert=element('aside');alreadyInert.inert=true;document.body.append(page,alreadyInert);
+  const focus=element('button');document.activeElement=focus;
+  const window=events();let backCalls=0;const stack=[{page:'listing'}];
+  const history={get state(){return stack.at(-1);},pushState(state){stack.push(state);},back(){backCalls++;if(stack.length>1)stack.pop();window.emit('popstate');}};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../video-player'),'utf8'),{window,document,history,location:{href:'https://aqartcom-v93.onrender.com/office-property.html?id=18'},URL});
+  return {api:window.PropertyVideo,document,window,history,page,alreadyInert,focus,backCalls:()=>backCalls,viewer:()=>document.body.children.find(e=>e.className==='property-video-viewer')};
+}
+
+test('closing embedded playback stops its frame, restores the page and consumes only the viewer history entry',()=>{
+  const h=viewerHarness();h.api.open({url:'https://facebook.com/reel/123456789/',title:'عقار'});
+  const viewer=h.viewer(),frame=viewer.querySelector('.video-viewer-stage').children[0];
+  assert.equal(h.page.inert,true);assert.ok(h.history.state.propertyVideo);
+  assert.equal(frame.tagName,'IFRAME');assert.match(frame.src,/autoplay=false/);
+  const sandbox=frame.attributes.sandbox.split(' ');
+  assert.ok(sandbox.includes('allow-scripts'));assert.ok(!sandbox.some(x=>x.includes('navigation')||x.includes('popups')));
+  assert.doesNotMatch(viewer.innerHTML,/href=|target=/);
+  h.api.open({url:'https://youtu.be/dQw4w9WgXcQ'});assert.equal(h.viewer(),viewer);
+  viewer.querySelector('.video-viewer-close').onclick();
+  assert.equal(frame.src,'about:blank');assert.equal(h.viewer(),undefined);
+  assert.equal(h.page.inert,false);assert.equal(h.alreadyInert.inert,true);
+  assert.equal(h.document.activeElement,h.focus);assert.equal(h.backCalls(),1);
+  assert.equal(h.history.state.page,'listing');
+});
+
+test('browser Back closes the viewer without a second history navigation; unsupported links remain closable inside the site',()=>{
+  const h=viewerHarness();h.api.open({url:'https://example.com/video'});
+  const viewer=h.viewer();assert.match(viewer.querySelector('.video-viewer-stage').innerHTML,/غير مدعوم/);
+  h.history.back();assert.equal(h.viewer(),undefined);assert.equal(h.backCalls(),1);assert.equal(h.history.state.page,'listing');
+  h.api.open({url:'https://example.com/video'});h.viewer().querySelector('.video-viewer-return').onclick();
+  assert.equal(h.viewer(),undefined);assert.equal(h.backCalls(),2);
+});
+
+test('entering a provider fullscreen frame keeps the viewer open; exiting fullscreen closes it once',()=>{
+  const h=viewerHarness();h.api.open({url:'https://youtu.be/dQw4w9WgXcQ'});
+  const viewer=h.viewer(),frame=viewer.querySelector('.video-viewer-stage').children[0];
+  h.document.fullscreenElement=viewer;h.document.emit('fullscreenchange');
+  h.document.fullscreenElement=frame;h.document.emit('fullscreenchange');assert.equal(h.viewer(),viewer);
+  h.document.fullscreenElement=null;h.document.emit('fullscreenchange');
+  assert.equal(h.viewer(),undefined);assert.equal(h.backCalls(),1);assert.equal(frame.src,'about:blank');
 });

@@ -41,3 +41,7 @@ html body .play-main{border:0;padding:0;background:#d3a331!important;color:#fff!
 .video-inline-preview>.video-viewer-header,.video-inline-preview>.video-viewer-footer{display:none}
 .video-inline-preview>.video-viewer-stage{position:relative;width:100%;height:100%;overflow:hidden;background:#000}
 .property-video-viewer .video-viewer-retry,.property-video-viewer .video-viewer-status{z-index:2}
+
+/* Video thumbnails open the internal viewer without a navigable preview link. */
+button.marei-preview{width:100%;border:0;padding:0;font:inherit;cursor:pointer}
+.property-video-viewer .video-viewer-return{min-height:44px;padding:8px 16px}

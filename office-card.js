@@ -25,7 +25,6 @@ window.officeListingCard=function(p){
   const thumb=(Array.isArray(p.media)?p.media:[]).find(m=>/^\/assets\/fb-[a-z0-9-]+\.jpg$/.test(m.url||''));
   const image=poster||thumb?.url;
   const hasVideo=Boolean(hosted||p.media_kind==='video'||(!p.media_kind&&p.video_duration));
-  const externalVideo=hasVideo&&!hosted&&original?.platform!=='facebook';
   const seconds=Number(hosted?.duration);
   const duration=hosted&&Number.isFinite(seconds)&&seconds>0?Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0'):p.video_duration||('فيديو على '+platform);
   const id=String(p.market_id||p.id||'');
@@ -34,9 +33,9 @@ window.officeListingCard=function(p){
   const published=dateLabel(p.source_published_at),observed=dateLabel(p.observed_at);
   const dates=[published?'تاريخ المنشور: '+published:p.published_label||'تاريخ المنشور غير متاح',observed?'رصد الإعلان: '+observed:''].filter(Boolean).join(' · ');
   const mediaContents=`${image?`<img src="${esc(image)}" alt="${esc(thumb?.alt||p.title)}" loading="lazy" width="640" height="360">`:''}
-    ${hasVideo?`<span class="marei-play" aria-hidden="true">${externalVideo?'↗':'▶'}</span><span class="marei-duration">${esc(duration)}</span>`:''}
+    ${hasVideo?`<span class="marei-play" aria-hidden="true">▶</span><span class="marei-duration">${esc(duration)}</span>`:''}
     ${sold?'<strong class="marei-sold-badge">تم البيع</strong>':''}`;
-  const preview=hasVideo&&(hosted||url)?`<a class="marei-preview" ${externalVideo?'data-video-external="true"':''} data-video-title="${esc(p.title)}" href="${esc(hosted?.url||url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc('شاهد فيديو '+p.title+(externalVideo?' على '+platform:''))}">${mediaContents}</a>`:image?`<div class="marei-preview">${mediaContents}</div>`:'';
+  const preview=hasVideo&&(hosted||url)?`<button type="button" class="marei-preview" data-property-video="${esc(JSON.stringify({url:hosted?.url||url,title:p.title}))}" aria-label="${esc('شاهد فيديو '+p.title)}">${mediaContents}</button>`:image?`<div class="marei-preview">${mediaContents}</div>`:'';
   return `<article class="marei-card${sold?' marei-sold':''}">
     ${preview}<div class="marei-card-body">
     <div class="marei-card-top"><span>${esc(p.advertiser_name||'المعلن')}</span><span class="marei-platform">${esc(platform)}${p.offer_number?' · عرض '+esc(p.offer_number):''}</span></div>
