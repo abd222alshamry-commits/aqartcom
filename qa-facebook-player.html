@@ -1,0 +1,9 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>اختبار تشغيل الفيديو</title><style>body{margin:0;font:16px Arial;background:#101827;color:#fff}button{padding:14px;margin:12px}#stage{position:relative;width:100vw;height:78vh;background:#000}#status{padding:12px}</style><script src="/facebook-player.js"></script></head><body><button id="start">تشغيل بضغطة واحدة</button><button id="stop">إغلاق</button><p id="status" role="status">جاهز</p><div id="stage"></div><script>
+let control;
+document.querySelector('#start').onclick=()=>{
+ control?.destroy();
+ document.querySelector('#status').textContent='تحميل';
+ control=FacebookPropertyPlayer.mount({stage:document.querySelector('#stage'),url:'https://www.facebook.com/100079461761425/videos/27922983067403817/',onReady:()=>{document.querySelector('#status').textContent='جاهز للتشغيل';},onPlaying:()=>{document.querySelector('#status').textContent='يعمل';},onError:error=>{document.querySelector('#status').textContent='تعذر التشغيل: '+error.message;}});
+};
+document.querySelector('#stop').onclick=()=>{control?.destroy();document.querySelector('#status').textContent='أغلق';};
+</script></body></html>
