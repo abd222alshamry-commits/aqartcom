@@ -1,5 +1,5 @@
-const CACHE='aqartkom-v92-public-v1';
-const SHELL=['/offline.html','/icons/icon-192.png','/icons/icon-512.png'];
+const CACHE='aqartkom-v93-theme-v1';
+const SHELL=['/site-ui.js','/site-ui.css','/offline.html','/icons/icon-192.png','/icons/icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('aqartkom-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;const u=new URL(e.request.url);if(u.origin!==location.origin||u.pathname.startsWith('/api/'))return;if(e.request.mode==='navigate'){e.respondWith(fetch(e.request).catch(()=>caches.match('/offline.html')));}else if(SHELL.includes(u.pathname)&&!u.search){e.respondWith(fetch(e.request).catch(()=>caches.match(u.pathname)));}});

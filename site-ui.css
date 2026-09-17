@@ -1,0 +1,59 @@
+.site-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 20px;vertical-align:middle}
+.site-icon svg{display:block;width:100%;height:100%}
+button.theme-toggle{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:0 0 auto;min-width:36px;min-height:36px;padding:7px;border:1px solid #607589;border-radius:8px;background:#17334e;color:#fff;font:700 12px Cairo,Arial,sans-serif;cursor:pointer;line-height:1.5}
+.theme-toggle .theme-label{display:none}
+.theme-toggle:focus-visible,.contact-link:focus-visible{outline:3px solid #e3b951;outline-offset:3px}
+.theme-toggle-floating{position:fixed;top:12px;left:12px;z-index:30}
+.topbar .nav>#themeToggle{margin-inline-start:auto}
+.contact-link{display:inline-flex!important;align-items:center;justify-content:center;gap:8px}
+.contact-link.contact-link--call:not(.advertiser-number),.contact-link.contact-link--whatsapp{min-height:40px;padding:8px 12px;border:1px solid transparent;border-radius:8px;text-decoration:none;color:#fff;font-weight:700;line-height:1.6}
+.contact-link.contact-link--call:not(.advertiser-number){background:#173f5f}
+.contact-link.contact-link--whatsapp{background:#187b46}
+.contact-link:hover{filter:brightness(1.12)}
+.advertiser-number.contact-link{direction:ltr}
+@media(max-width:800px){
+  #siteNav .theme-toggle{width:100%;grid-column:1/-1;min-height:36px;padding:5px 8px;font-size:11px}
+  #siteNav .theme-label,.mobile-nav .theme-label{display:inline}
+  body>header .theme-toggle{padding:6px;min-width:34px;min-height:34px}
+  .marei-contact .contact-link{padding:8px 6px;font-size:12px;gap:6px}
+  .advertiser-contact-dock .contact-link{min-height:42px;padding:9px 6px;font-size:13px}
+}
+
+/* Override the legacy light surfaces without altering photos, videos or map tiles. */
+html[data-theme="dark"]{color-scheme:dark;--bg:#0b1420;--card:#142338;--line:#334960;--muted:#adbed0;--gold:#e5b952;--navy:#102a43;--green:#63d99d;--red:#ff9ba6;--night-text:#e7eff9;--night-field:#0e1c2d}
+html[data-theme="dark"] body{background:var(--bg);color:var(--night-text)}
+html[data-theme="dark"] :is(.searchbox,.card,.property-card,.marei-card,.panel,.stat,.person,.property,.modalbox,.box,.c,.account-card,.filters,.summary,.result,.table-wrap,.assistant-panel,.assistant-messages,.geo-search-section,.cities-card,#cities,.mobile-section-menu,.compare-dock,.advertiser-contact-dock,.bubble,.thread,.sham-box,.sham-address){background:var(--card)!important;color:var(--night-text)!important;border-color:var(--line)!important}
+html[data-theme="dark"] :is(.fact,.chip,.pill,.tag,.sum,.trust,.office-detail-note,.marei-note,.property-attachments,.property-location,.media-previews figure,.assistant-msg.bot,.assistant-reset,.messages,.thread.active,.marei-facts>span,.marei-platform){background:#1c3047!important;color:#d3e2f2!important;border-color:var(--line)!important}
+html[data-theme="dark"] :is(.modal,.overlay){background:#020712d9}
+html[data-theme="dark"] :is(header,.topbar,footer,.cta,.landmarks-hero){background:#0b1d30;color:var(--night-text);border-color:var(--line)}
+html[data-theme="dark"] :is(h1,h2,h3,h4,label,.head,.owner b,.citygrid button,.trustgrid span,.marei-facts strong,.categories button){color:var(--night-text)}
+html[data-theme="dark"] :is(.description,.marei-description,.marei-location,.marei-date,.marei-page-summary,.listing-filters label,.marei-toolbar,.loc,.location,.meta,.views,.breadcrumbs,.loading,.empty,.muted,.geo-note,.geo-head p,.media-limits,.media-selection-status,.owner small,.fact small,.searchbox>small,.copy){color:var(--muted)!important}
+html[data-theme="dark"] :is(.marei-card-top,.marei-availability,.head small,.marei-heading small,.stars,.price){color:#f0ca78}
+html[data-theme="dark"] :is(input,select,textarea){background:var(--night-field)!important;color:var(--night-text)!important;border-color:var(--line)!important}
+html[data-theme="dark"] :is(input,textarea)::placeholder{color:#94a8bf;opacity:1}
+html[data-theme="dark"] :is(input,select,textarea):disabled{opacity:.65}
+html[data-theme="dark"] input:is([type="checkbox"],[type="radio"]){accent-color:#e5b952}
+html[data-theme="dark"] button{background:#20374f!important;color:var(--night-text)!important;border-color:#425b74!important}
+html[data-theme="dark"] :is(.searchbtn,.primary,.accept,.send,.search,button[type="submit"],.cta button){background:#d5a638!important;color:#101f2e!important}
+html[data-theme="dark"] :is(.tab.active,.tabs button.active,.dash-tabs button.active,.auth-tab.active,.navbtn.active,button[aria-current="page"],.marei-filters button[aria-pressed="true"]){background:#365779!important;color:#fff!important;border-color:#8badcf!important}
+html[data-theme="dark"] :is(.categories i,.citygrid button,.heart,.fav,.auth-tab,.tools button,.result-actions button){background:#20374f;color:var(--night-text);border-color:var(--line)}
+html[data-theme="dark"] .heart.liked{color:#ff889b!important}
+html[data-theme="dark"] :is(a,.office-details-link,.head a,.advertiser-number){color:#a9d3ff}
+html[data-theme="dark"] :is(header a,.topbar a,.marei-source,.result-actions a,.cover a,.sendbox a,.recommendation a){color:#e7eff9}
+html[data-theme="dark"] .office-title-link{color:var(--night-text)}
+html[data-theme="dark"] .contact-link.contact-link--call:not(.advertiser-number){background:#294966!important;color:#fff!important;border-color:#54718d!important}
+html[data-theme="dark"] .contact-link.contact-link--whatsapp{background:#167347!important;color:#fff!important;border-color:#319164!important}
+html[data-theme="dark"] :is(.marei-sold .marei-availability,.media-error,.err,.error){color:#ffadb5!important}
+html[data-theme="dark"] :is(.red,.reject,.remove,.tag.overdue,.err){background:#4b2732!important;color:#ffc2ca!important}
+html[data-theme="dark"] :is(.green,.status,.verified,.ok,.best){background:#173e33!important;color:#a4efcb!important}
+html[data-theme="dark"] :is(.gold,.tag.approval,.badge.new,.next){background:#3a3322!important;color:#f7d899!important}
+html[data-theme="dark"] :is(td,th,.table th,.compare th:first-child,.compare td:first-child){background:var(--card);color:var(--night-text);border-color:var(--line)}
+html[data-theme="dark"] :is(th,.table th){background:#1c3047}
+html[data-theme="dark"] :is(.dash-tabs,.meta,.trustgrid>div,.assistant-form,.chat-head,.thread,.task,.property-location){border-color:var(--line)}
+html[data-theme="dark"] body[data-page="messages"] main{background:var(--card)}
+html[data-theme="dark"] body[data-page="hotels"] .hero form{background:var(--card);color:var(--night-text)}
+html[data-theme="dark"] .leaflet-container{background:#243448}
+html[data-theme="dark"] :is(.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-bar a,.leaflet-control-attribution){background:var(--card);color:var(--night-text)}
+html[data-theme="dark"] .leaflet-control-attribution a{color:#a9d3ff}
+html[data-theme="dark"] .me .bubble{background:#234b6c!important}
+html[data-theme="dark"] .theme-toggle{background:#20374f!important;color:#f2cd73!important}
