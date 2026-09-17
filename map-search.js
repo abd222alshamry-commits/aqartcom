@@ -1,5 +1,5 @@
 bindSyriaLocations(document);
-const $=s=>document.querySelector(s),map=L.map('map',{zoomControl:true}).setView([35.0,38.0],7);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const $=s=>document.querySelector(s),map=L.map('map',{zoomControl:true}).setView([35.0,38.0],7);addPropertyBasemaps(map);
 let properties=[],markers=L.layerGroup().addTo(map),drawPoints=[],polygonLayer=null,circleLayer=null,mode='bounds';const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const toast=m=>{const x=$('#toast');x.textContent=m;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2300)};
 function polygonFromBounds(){const b=map.getBounds();return[[b.getSouth(),b.getWest()],[b.getNorth(),b.getWest()],[b.getNorth(),b.getEast()],[b.getSouth(),b.getEast()]]}
 function filters(){return{city:$('#city').value,district:$('#district').value.trim(),mode:$('#mode').value,type:$('#type').value,minPrice:$('#minPrice').value,maxPrice:$('#maxPrice').value,rooms:$('#rooms').value}}

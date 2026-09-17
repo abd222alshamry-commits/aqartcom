@@ -8,7 +8,7 @@ const url=sourceUrl(p.external_url),sold=p.availability==='sold',tel=phone(p.pho
       const thumb=(Array.isArray(p.media)?p.media:[]).find(m=>/^\/assets\/fb-[a-z0-9-]+\.jpg$/.test(m.url||''));
       const details=p.detail_url||'/office-property.html?id='+encodeURIComponent(p.market_id||p.id);
       return `<article class="marei-card${sold?' marei-sold':''}">
-        <a class="marei-preview" href="${esc(url||'#')}" target="_blank" rel="noopener noreferrer" aria-label="${esc('شاهد فيديو '+p.title)}">
+        <a class="marei-preview" data-video-title="${esc(p.title)}" href="${esc(url||'#')}" target="_blank" rel="noopener noreferrer" aria-label="${esc('شاهد فيديو '+p.title)}">
           ${thumb?`<img src="${esc(thumb.url)}" alt="${esc(thumb.alt||p.title)}" loading="lazy" width="640" height="360">`:''}
           <span class="marei-play" aria-hidden="true">▶</span><span class="marei-duration">${esc(p.video_duration||'فيديو')}</span>
           ${sold?'<strong class="marei-sold-badge">تم البيع</strong>':''}
