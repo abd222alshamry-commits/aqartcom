@@ -3,15 +3,16 @@
 const $=id=>document.getElementById(id),K=SolKnowledge,S=SolStorage,C=SolConfig;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let memory=K.cleanMemory(S.readMemory()),snapshot=S.readSnapshot(),variant='cpu',worker=null,ready=false,busy=false,installed=false,downloading=null,history=[],pending=null,workerSerial=0,modelCheck=0;
+const voice=window.SolVoice?.create({textarea:$('question')});
 const humanBytes=n=>(n/1e9).toLocaleString('ar-SY',{maximumFractionDigits:2})+' غيغابايت';
 const selected=()=>S.profile($('modelChoice').value,variant);
 function announce(id,text){$(id).textContent=text;}
 function connection(){announce('connection',navigator.onLine===false?'دون إنترنت':'متصل');$('syncCatalog').disabled=navigator.onLine===false;}
 function snapshotStatus(){announce('snapshotStatus',snapshot?snapshot.data.length+' عرضًا محفوظًا · آخر تحديث: '+new Date(snapshot.saved_at).toLocaleString('ar-SY'):'لا توجد نسخة محفوظة بعد.');$('clearCatalog').hidden=!snapshot;}
-function setBusy(value){busy=value;$('send').disabled=value;$('stop').hidden=!value;$('modelChoice').disabled=value||!!downloading;$('clearChat').disabled=value;$('removeModel').disabled=value||!!downloading;}
+function setBusy(value){busy=value;voice?.setBusy(value);$('send').disabled=value;$('stop').hidden=!value;$('modelChoice').disabled=value||!!downloading;$('clearChat').disabled=value;$('removeModel').disabled=value||!!downloading;}
 function bubble(text,role='assistant',label='سول'){
  const article=document.createElement('article');article.className='bubble '+role;const name=document.createElement('b');name.textContent=role==='user'?'أنت':label;
- const body=document.createElement('p');body.textContent=text;article.append(name,body);$('conversation').append(article);$('conversation').scrollTop=$('conversation').scrollHeight;return {article,body};
+ const body=document.createElement('p');body.textContent=text;article.append(name,body);$('conversation').append(article);if(role==='assistant')voice?.addReply(body);$('conversation').scrollTop=$('conversation').scrollHeight;return {article,body};
 }
 function correctionButton(article,question,answer){const b=document.createElement('button');b.type='button';b.className='correct';b.textContent='صحّح هذه الإجابة ليتذكرها سول';b.onclick=()=>{const f=$('correctionForm');delete f.dataset.editing;f.hidden=false;f.dataset.question=question;f.elements.answer.value=answer.slice(0,1000);announce('correctionQuestion',question);f.elements.answer.focus();};article.append(b);}
 function results(result){
@@ -26,17 +27,17 @@ function startWorker(){
   if(d.type==='status')announce('chatStatus',d.text);
   if(d.type==='ready'){ready=true;announce('modelStatus','النموذج جاهز ويعمل على جهازك');announce('modeLabel','محادثة ذكية محلية — '+selected().label);if(!pending){setBusy(false);announce('chatStatus','سول جاهز دون إنترنت');}}
   if(d.type==='token'&&pending){pending.body.textContent+=d.text;$('conversation').scrollTop=$('conversation').scrollHeight;}
-  if(d.type==='done'&&pending){const p=pending;p.body.textContent=d.text||'لم تكتمل الإجابة؛ حاول صياغة السؤال بصورة أقصر.';history.push({role:'user',content:p.question},{role:'assistant',content:p.body.textContent});history=history.slice(-8);correctionButton(p.article,p.question,p.body.textContent);pending=null;setBusy(false);announce('chatStatus','تمت الإجابة محليًا على جهازك.');}
-  if(d.type==='error'){const message=d.message;if(pending){pending.body.textContent='تعذرت الإجابة بالنموذج. '+K.plainReply(pending.result,snapshot);pending=null;}terminate();announce('modelStatus',message);announce('chatStatus','يمكنك متابعة دليل الموقع والبحث المحلي.');announce('modeLabel','دليل الموقع والبحث المحلي — النموذج غير جاهز');}
+  if(d.type==='done'&&pending){const p=pending;p.body.textContent=d.text||'لم تكتمل الإجابة؛ حاول صياغة السؤال بصورة أقصر.';history.push({role:'user',content:p.question},{role:'assistant',content:p.body.textContent});history=history.slice(-8);correctionButton(p.article,p.question,p.body.textContent);voice?.addReply(p.body,true);pending=null;setBusy(false);announce('chatStatus','تمت الإجابة محليًا على جهازك.');}
+  if(d.type==='error'){const message=d.message;if(pending){pending.body.textContent='تعذرت الإجابة بالنموذج. '+K.plainReply(pending.result,snapshot);voice?.addReply(pending.body,true);pending=null;}terminate();announce('modelStatus',message);announce('chatStatus','يمكنك متابعة دليل الموقع والبحث المحلي.');announce('modeLabel','دليل الموقع والبحث المحلي — النموذج غير جاهز');}
  };
- worker.onerror=()=>{if(serial!==workerSerial)return;if(pending){pending.body.textContent='تعذر تشغيل النموذج. '+K.plainReply(pending.result,snapshot);pending=null;}terminate();announce('modelStatus','تعذر فتح ملفات التشغيل. أعد محاولة التنزيل أثناء الاتصال أو اختر النموذج الأخف.');};
+ worker.onerror=()=>{if(serial!==workerSerial)return;if(pending){pending.body.textContent='تعذر تشغيل النموذج. '+K.plainReply(pending.result,snapshot);voice?.addReply(pending.body,true);pending=null;}terminate();announce('modelStatus','تعذر فتح ملفات التشغيل. أعد محاولة التنزيل أثناء الاتصال أو اختر النموذج الأخف.');};
  return worker;
 }
 async function inspectModel(){const token=++modelCheck,p=selected();ready=false;announce('modelSize','التنزيل الأول نحو '+humanBytes(S.files(p).reduce((n,f)=>n+f.bytes,0)+C.runtimeBytes)+(variant==='gpu'?' · تسريع الجهاز متاح':' · تشغيل على المعالج؛ قد يكون أبطأ'));const found=await S.present(p);if(token!==modelCheck)return;installed=found;$('downloadModel').textContent=installed?'تشغيل النموذج المحفوظ':'تنزيل وتشغيل النموذج';$('removeModel').hidden=!installed;announce('modelStatus',installed?'ملفات النموذج محفوظة. يمكنك تشغيله دون إنترنت.':'النموذج لم يُنزّل بعد. دليل الموقع يعمل دون تنزيل النموذج.');}
 async function ensureShell(){
  if(!('serviceWorker' in navigator)){announce('offlinePage','الحفظ غير مدعوم');return;}
  try{
-  const check=async()=>{const cache=await caches.open('aqartkom-v93-sol-shell-v2');const files=['/sol.html','/sol.css','/sol.js','/sol-config.js','/sol-knowledge.js','/sol-storage.js','/sol-worker.js'];const saved=await Promise.all(files.map(f=>cache.match(f)));announce('offlinePage',saved.every(Boolean)?'الصفحة محفوظة':'جارٍ حفظ الصفحة');};
+  const check=async()=>{const cache=await caches.open('aqartkom-v93-sol-shell-v3');const files=['/sol.html','/sol.css','/sol.js','/sol-config.js','/sol-knowledge.js','/sol-storage.js','/sol-worker.js','/sol-voice.js'];const saved=await Promise.all(files.map(f=>cache.match(f)));announce('offlinePage',saved.every(Boolean)?'الصفحة محفوظة':'جارٍ حفظ الصفحة');};
   const registration=await navigator.serviceWorker.register('/service-worker.js');
   const observe=()=>{const sw=registration.installing;if(sw)sw.addEventListener('statechange',()=>{if(sw.state==='activated')check().catch(()=>{});});};
   observe();registration.addEventListener('updatefound',observe);navigator.serviceWorker.addEventListener('controllerchange',()=>check().catch(()=>{}));
@@ -61,15 +62,15 @@ $('downloadModel').onclick=async()=>{
 $('cancelDownload').onclick=()=>downloading?.abort();
 $('removeModel').onclick=async()=>{if(downloading||busy)return;pending=null;terminate();try{await S.remove(selected());await inspectModel();announce('modeLabel','دليل الموقع والبحث المحلي');}catch(e){announce('modelStatus',e.message);}};
 $('modelChoice').onchange=async()=>{terminate();pending=null;await inspectModel();};
-$('stop').onclick=()=>{if(pending){pending.body.textContent+='\nتم إيقاف الإجابة.';pending=null;}terminate();announce('chatStatus','تم الإيقاف وتحرير النموذج من الذاكرة.');};
-$('clearChat').onclick=()=>{history=[];$('conversation').replaceChildren();$('results').replaceChildren();$('correctionForm').hidden=true;bubble('بدأنا محادثة جديدة. تفضيلاتك وتصحيحاتك المحفوظة ما زالت في ذاكرة سول.');};
+$('stop').onclick=()=>{voice?.stop();if(pending){pending.body.textContent+='\nتم إيقاف الإجابة.';voice?.addReply(pending.body);pending=null;}terminate();announce('chatStatus','تم الإيقاف وتحرير النموذج من الذاكرة.');};
+$('clearChat').onclick=()=>{voice?.stop();history=[];$('conversation').replaceChildren();$('results').replaceChildren();$('correctionForm').hidden=true;bubble('بدأنا محادثة جديدة. تفضيلاتك وتصحيحاتك المحفوظة ما زالت في ذاكرة سول.');};
 $('chatForm').onsubmit=async event=>{
- event.preventDefault();if(busy||downloading)return;const question=$('question').value.trim();if(!question)return;$('question').value='';bubble(question,'user');const result=K.retrieve(question,snapshot,memory);results(result);
- if(/^تذكر\s/.test(question)){const note=question.replace(/^تذكر\s+(?:أنني\s+|اني\s+)?/,'').slice(0,500);$('noteForm').elements.note.value=note;$('memoryPanel').open=true;bubble('جهزت هذه المعلومة في خانة الذاكرة. اضغط «إضافة إلى الذاكرة» إذا أردت حفظها على هذا الجهاز.','assistant','سول — الذاكرة');return;}
+ event.preventDefault();if(busy||downloading)return;const question=$('question').value.trim();if(!question)return;voice?.stop();$('question').value='';bubble(question,'user');const result=K.retrieve(question,snapshot,memory);results(result);
+ if(/^تذكر\s/.test(question)){const note=question.replace(/^تذكر\s+(?:أنني\s+|اني\s+)?/,'').slice(0,500);$('noteForm').elements.note.value=note;$('memoryPanel').open=true;const b=bubble('جهزت هذه المعلومة في خانة الذاكرة. اضغط «إضافة إلى الذاكرة» إذا أردت حفظها على هذا الجهاز.','assistant','سول — الذاكرة');voice?.addReply(b.body,true);return;}
  const siteProcedure=!result.search&&result.guides.some(g=>['host','office','team','payment','cancel','publish','offline','memory','hotels'].includes(g.id));
- if(!installed||siteProcedure){const reply=K.plainReply(result,snapshot),b=bubble(reply,'assistant',siteProcedure?'سول — من دليل الموقع':'سول — دليل وبحث محلي');correctionButton(b.article,question,reply);announce('chatStatus',siteProcedure?'هذه الخطوات من دليل الموقع مباشرة.':'للمحادثة التوليدية، نزّل النموذج من لوحة «سول دون إنترنت».');return;}
+ if(!installed||siteProcedure){const reply=K.plainReply(result,snapshot),b=bubble(reply,'assistant',siteProcedure?'سول — من دليل الموقع':'سول — دليل وبحث محلي');correctionButton(b.article,question,reply);voice?.addReply(b.body,true);announce('chatStatus',siteProcedure?'هذه الخطوات من دليل الموقع مباشرة.':'للمحادثة التوليدية، نزّل النموذج من لوحة «سول دون إنترنت».');return;}
  const b=bubble('','assistant','سول — ذكاء محلي');pending={...b,question,result};setBusy(true);
- try{startWorker().postMessage({type:'generate',key:selected().key,variant,messages:K.messages(question,result,snapshot,memory,history)});}catch(e){pending.body.textContent=e.message;pending=null;setBusy(false);}
+ try{startWorker().postMessage({type:'generate',key:selected().key,variant,messages:K.messages(question,result,snapshot,memory,history)});}catch(e){pending.body.textContent=e.message;voice?.addReply(pending.body);pending=null;setBusy(false);}
 };
 $('question').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!busy)$('chatForm').requestSubmit();}};
 document.querySelectorAll('[data-prompt]').forEach(b=>b.onclick=()=>{$('question').value=b.dataset.prompt;$('question').focus();$('chatForm').requestSubmit();});
@@ -89,6 +90,7 @@ $('cancelCorrection').onclick=()=>{$('correctionForm').hidden=true;delete $('cor
 $('clearMemory').onclick=()=>{try{S.clearMemory();memory=K.cleanMemory();renderMemory();$('noteForm').reset();delete $('noteForm').dataset.editing;delete $('correctionForm').dataset.editing;$('correctionForm').reset();$('correctionForm').hidden=true;announce('memoryStatus','تم مسح التفضيلات والملاحظات والتصحيحات.');}catch(e){announce('memoryStatus',e.message);}};
 for(const city of K.cities){const option=document.createElement('option');option.value=city;option.textContent=city;$('memoryCity').append(option);}
 window.addEventListener('online',connection);window.addEventListener('offline',connection);window.addEventListener('pagehide',()=>worker?.terminate());
+document.querySelectorAll('.bubble.assistant p').forEach(body=>voice?.addReply(body));
 connection();snapshotStatus();renderMemory();ensureShell();
 (async()=>{try{const adapter=await navigator.gpu?.requestAdapter?.();if(adapter?.features.has('shader-f16'))variant='gpu';}catch{}await inspectModel();})();
 })();

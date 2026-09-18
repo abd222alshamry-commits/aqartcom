@@ -1,5 +1,5 @@
-const CACHE='aqartkom-v93-sol-shell-v2';
-const SHELL=['/site-ui.js','/site-ui.css','/offline.html','/icons/icon-192.png','/icons/icon-512.png','/sol.html','/sol.css','/sol.js','/sol-config.js','/sol-knowledge.js','/sol-storage.js','/sol-worker.js','/manifest.webmanifest'];
+const CACHE='aqartkom-v93-sol-shell-v3';
+const SHELL=['/site-ui.js','/site-ui.css','/offline.html','/icons/icon-192.png','/icons/icon-512.png','/sol.html','/sol.css','/sol.js','/sol-voice.js','/sol-config.js','/sol-knowledge.js','/sol-storage.js','/sol-worker.js','/manifest.webmanifest'];
 const PRESERVE=['aqartkom-sol-models-v1','aqartkom-sol-runtime-v1'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('aqartkom-')&&k!==CACHE&&!PRESERVE.includes(k)).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
