@@ -21,19 +21,19 @@ function number(value,max,integer=false){
 }
 const queueSQL=`
  SELECT 'property'::text kind,p.id,p.title,p.city,p.type category,p.status,p.created_at,p.updated_at,
- o.name office_name,p.is_demo FROM properties p LEFT JOIN offices o ON o.id=p.office_id
+ o.name office_name,p.is_demo FROM properties p LEFT JOIN offices o ON o.id=p.office_id WHERE p.deleted_at IS NULL
  UNION ALL
  SELECT 'hotel',h.id,h.name,h.city,h.lodging_type,h.status,h.created_at,h.updated_at,
- o.name,h.slug LIKE 'aqartkom-demo-hotel-v1-%' FROM hotels h LEFT JOIN offices o ON o.id=h.office_id
+ o.name,h.slug LIKE 'aqartkom-demo-hotel-v1-%' FROM hotels h LEFT JOIN offices o ON o.id=h.office_id WHERE h.deleted_at IS NULL
  UNION ALL
  SELECT 'market',m.id,m.title,m.city,m.property_type,m.status,m.created_at,m.updated_at,
  COALESCE(o.name,s.name,m.advertiser_name),FALSE FROM market_listings m
- LEFT JOIN offices o ON o.id=m.office_id LEFT JOIN market_sources s ON s.id=m.source_id`;
+ LEFT JOIN offices o ON o.id=m.office_id LEFT JOIN market_sources s ON s.id=m.source_id WHERE m.deleted_at IS NULL`;
 
 // Only listing content is exposed: no reservations, financial records or source credentials.
 async function details(db,kind,id,lock=false){
  const table=Object.hasOwn(tables,kind)?tables[kind]:null;if(!table||!idOK(id))throw fail(404,'العرض غير موجود');
- const row=(await db.query(`SELECT * FROM ${table} WHERE id=$1${lock?' FOR UPDATE':''}`,[id])).rows[0];
+ const row=(await db.query(`SELECT * FROM ${table} WHERE id=$1 AND deleted_at IS NULL${lock?' FOR UPDATE':''}`,[id])).rows[0];
  if(!row)throw fail(404,'العرض غير موجود');
  const pick=keys=>Object.fromEntries(keys.map(k=>[k,row[k]??null]));
  const common=['id','city','district','description','status'];let item;

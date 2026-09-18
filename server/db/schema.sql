@@ -1293,3 +1293,24 @@ CREATE TABLE IF NOT EXISTS offer_review_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_offer_review_history ON offer_review_events(kind,offer_id,id DESC);
+
+-- Listing removal retains reservations, media and audit history while removing public visibility.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE offer_review_events DROP CONSTRAINT IF EXISTS offer_review_events_action_check;
+ALTER TABLE offer_review_events ADD CONSTRAINT offer_review_events_action_check CHECK (action IN ('create','approve','reject','pending','edit','delete'));
+CREATE OR REPLACE FUNCTION keep_deleted_listing_hidden() RETURNS trigger AS $$
+BEGIN
+ IF NEW.deleted_at IS NOT NULL THEN
+  IF TG_TABLE_NAME = 'hotels' THEN NEW.status := 'inactive'; ELSE NEW.status := 'rejected'; END IF;
+ END IF;
+ RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS keep_deleted_hidden ON properties;
+CREATE TRIGGER keep_deleted_hidden BEFORE INSERT OR UPDATE ON properties FOR EACH ROW EXECUTE FUNCTION keep_deleted_listing_hidden();
+DROP TRIGGER IF EXISTS keep_deleted_hidden ON market_listings;
+CREATE TRIGGER keep_deleted_hidden BEFORE INSERT OR UPDATE ON market_listings FOR EACH ROW EXECUTE FUNCTION keep_deleted_listing_hidden();
+DROP TRIGGER IF EXISTS keep_deleted_hidden ON hotels;
+CREATE TRIGGER keep_deleted_hidden BEFORE INSERT OR UPDATE ON hotels FOR EACH ROW EXECUTE FUNCTION keep_deleted_listing_hidden();

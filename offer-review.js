@@ -3,7 +3,7 @@
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const statuses={pending:'بانتظار المراجعة',active:'نشط',published:'منشور',approved:'معتمد وغير منشور',rejected:'مرفوض',inactive:'غير نشط',duplicate:'مكرر'};
 const kinds={property:'عقار',hotel:'إقامة',market:'عرض مكتب / مصدر'},lodgings={hotel:'فندق',furnished_apartment:'شقة مفروشة',farm:'مزرعة'};
-const actions={create:'إضافة العرض',approve:'اعتماد',reject:'رفض',pending:'إعادة للمراجعة'};
+const actions={edit:'تعديل الإعلان',delete:'حذف الإعلان',create:'إضافة العرض',approve:'اعتماد',reject:'رفض',pending:'إعادة للمراجعة'};
 let page=1,permissions={},current=null,offices=[],loadingId=0,detailId=0;
 async function api(url,options={}){const r=await fetch(url,{credentials:'same-origin',...options}),d=await r.json();if(!r.ok){const e=Error(d.error||'تعذر تنفيذ الطلب');e.status=r.status;throw e;}return d;}
 const post=(url,body)=>api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -36,6 +36,7 @@ async function open(kind,id){
   const images=kind==='market'?(Array.isArray(o.media)?o.media:[]).filter(m=>m?.type==='image'):[...(Array.isArray(o.images)?o.images:[]),...(o.image_url?[o.image_url]:[])];
   const videos=kind==='market'?(Array.isArray(o.media)?o.media:[]).filter(m=>m?.type==='video'):o.videos;
   $('detail').innerHTML=`<dl class="details">${facts.filter(f=>f[1]!=null&&f[1]!=='').map(([label,value])=>`<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join('')}</dl><p class="description">${esc(o.description)}</p>${o.is_demo?'<p class="notice">عرض تجريبي؛ لا يمكن اعتماده كعرض حقيقي.</p>':''}${safeURL(o.external_url)?`<a href="${esc(safeURL(o.external_url))}" target="_blank" rel="noopener noreferrer">فتح مرجع العرض</a>`:''}${media(images,videos)}${kind==='hotel'?`<h3>شروط الإقامة</h3><p class="description">${esc(o.rental_terms||'لم تُضف شروط بعد')}</p><p class="description">${esc(o.cancellation_policy||'')}</p><p>الدخول: ${esc(o.check_in_time)} · المغادرة: ${esc(o.check_out_time)}</p><h3>الغرف (${o.rooms.length})</h3>${o.rooms.map(r=>`<div class="room"><b>${esc(r.name)} — ${esc(statuses[r.status])}</b><p>${esc(r.description)}</p><p>${esc(r.price)} ${esc(r.currency)} · ${esc(r.max_guests)} ضيوف · العدد ${esc(r.quantity)}</p>${media(r.images,r.videos)}</div>`).join('')}`:''}`;
+  $('detail').insertAdjacentHTML('afterbegin',`<div data-listing-kind="${esc(kind)}" data-listing-id="${esc(id)}" data-title="${esc(o.title||o.name)}"></div>`);
   $('history').innerHTML=d.history.length?d.history.map(e=>`<div class="history-item"><b>${esc(actions[e.action])} · ${esc(e.actor_name||'حساب محذوف')}</b><p>${esc(statuses[e.from_status]||'جديد')} ← ${esc(statuses[e.to_status])} · ${esc(new Date(e.created_at).toLocaleString('ar-SY'))}</p><p class="description">${esc(e.reason||'بلا ملاحظات')}</p></div>`).join(''):'<p>لا توجد قرارات مسجلة في شاشة المراجعة حتى الآن.</p>';
   $('decisionForm').reset();$('decisionForm').hidden=!permissions.can_review;$('decisionForm').elements.action.querySelector('[value=approve]').disabled=!!o.is_demo;
   if(o.is_demo)$('decisionForm').elements.action.value='pending';

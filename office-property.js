@@ -10,7 +10,7 @@
   note.textContent=json.data.platform==='manual_office'?'عرض أضافه فريق الإشراف لصالح المكتب وجرى اعتماده. تأكد من المكتب من التوفر والسعر الحالي.':'ملخص من إعلان المعلن على '+platform+'. تأكد من المعلن من التوفر والسعر الحالي. موقع العقار موضح بحسب المعلومات المنشورة في الإعلان.';
   status.textContent='';note.hidden=false;share.hidden=false;
   showOfficeLocation(json.data);
-  share.onclick=async()=>{try{if(navigator.share)await navigator.share({title:json.data.title,url:location.href});else{await navigator.clipboard.writeText(location.href);status.textContent='تم نسخ رابط الإعلان';}}catch(error){if(error.name!=='AbortError')status.textContent='يمكنك نسخ رابط الإعلان من شريط العنوان.';}};
+  share.onclick=async()=>{if(window.ListingActions)return ListingActions.share('market',id,json.data.title);try{if(navigator.share)await navigator.share({title:json.data.title,url:location.href});else{await navigator.clipboard.writeText(location.href);status.textContent='تم نسخ رابط الإعلان';}}catch(error){if(error.name!=='AbortError')status.textContent='يمكنك نسخ رابط الإعلان من شريط العنوان.';}};
  }catch(error){status.textContent=error.message;}
 })();
 

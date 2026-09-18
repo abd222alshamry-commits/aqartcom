@@ -47,6 +47,6 @@ window.officeListingCard=function(p){
     <a class="office-details-link" href="${details}">تفاصيل العقار ←</a><small class="marei-date">${esc(dates)}</small>
     ${url?`<a class="marei-source" href="${esc(url)}" target="_blank" rel="noopener noreferrer">الإعلان الأصلي على ${esc(platform)} <span aria-hidden="true">↗</span></a>`:''}
     ${!sold&&(tel||wa)?`<div class="marei-contact">${tel?`<a href="tel:${tel}" aria-label="${esc('اتصل بـ'+(p.advertiser_name||'المعلن'))}">اتصال بالمعلن</a>`:''}${wa?`<a href="https://wa.me/${wa.slice(1)}?text=${encodeURIComponent('مرحبًا، أستفسر عن إعلان: '+p.title+' '+(url||''))}" target="_blank" rel="noopener noreferrer">واتساب</a>`:''}</div>`:''}
-    </div></article>`;
+    <div data-listing-kind="market" data-listing-id="${esc(id)}" data-title="${esc(p.title)}"></div></div></article>`;
 };
 })();
