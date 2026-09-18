@@ -7,6 +7,10 @@ private_uploads/
 backups/
 *.zip
 *.apk
+*.jks
+*.keystore
+*.p12
+signing-private/
 
 mobile/android/.gradle/
 mobile/android/build/

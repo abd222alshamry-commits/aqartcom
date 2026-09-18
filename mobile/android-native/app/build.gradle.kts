@@ -9,11 +9,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.aqartkom.mobileapp"
+        // New signing identity: install beside 1.4.2 without deleting its local data.
+        applicationId = "com.aqartkom.mobileapp.v2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 142
-        versionName = "1.4.2"
+        versionCode = 150
+        versionName = "1.5.0"
         buildConfigField("String", "API_ORIGIN", "\"https://aqartcom-v93.onrender.com\"")
         ndk { abiFilters += "arm64-v8a" }
     }

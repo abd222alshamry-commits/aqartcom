@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () -> Unit, onAccount: () -> Unit) {
+fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () -> Unit, onAccount: () -> Unit, onServices: () -> Unit, onSol: () -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Spacer(Modifier.height(20.dp))
         Text("عقارتكم", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
@@ -22,6 +22,8 @@ fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () ->
         Text("اختر القسم الذي تريد استكشافه", color = MaterialTheme.colorScheme.onSurfaceVariant)
         SectionCard("العقارات", "بيع وشراء وإيجار العقارات", "تصفح الإعلانات، ابحث على الخريطة، وتواصل مع المعلن أو أضف عقارك.", "استكشف العقارات", Icons.Default.Apartment, onProperties)
         SectionCard("الفنادق والحجوزات", "ابحث عن إقامتك القادمة", "استعرض الفنادق والغرف، اختر التواريخ، وراجع السعر والتوفر قبل تأكيد الحجز.", "استكشف الفنادق واحجز", Icons.Default.Hotel, onHotels)
+        OutlinedButton(onServices, Modifier.fillMaxWidth()) { Icon(Icons.Default.Dashboard, null); Spacer(Modifier.width(8.dp)); Text("الخدمات والإدارة والمستضيفون") }
+        FilledTonalButton(onSol, Modifier.fillMaxWidth()) { Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(8.dp)); Text("اسأل سول") }
         TextButton(onAccount, Modifier.fillMaxWidth()) { Icon(Icons.Default.PersonOutline, null); Spacer(Modifier.width(8.dp)); Text("حسابي") }
     }
 }
