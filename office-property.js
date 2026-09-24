@@ -5,6 +5,8 @@
   const response=await fetch('/api/market/listings/'+id),json=await response.json();
   if(!response.ok)throw Error(json.error||'تعذر تحميل الإعلان');
   document.title=json.data.title+' — عقارتكم';document.getElementById('officeProperty').innerHTML=officeListingCard(json.data);
+  const savedImages=MediaGallery.array(json.data.media).filter(item=>item?.type==='image'||(!item?.type&&/\.(jpe?g|png|webp)(?:[?#]|$)/i.test(item?.url||'')));
+  if(savedImages.length){const gallery=document.createElement('section');gallery.id='officePropertyMedia';document.getElementById('officeProperty').append(gallery);MediaGallery.mount(gallery,MediaGallery.items({images:savedImages},json.data.title),'صور العقار');}
   const note=document.getElementById('officeDetailNote');
   const platform={facebook:'فيسبوك',instagram:'إنستغرام',tiktok:'تيك توك'}[json.data.platform]||'المصدر';
   note.textContent=json.data.platform==='manual_office'?'عرض أضافه فريق الإشراف لصالح المكتب وجرى اعتماده. تأكد من المكتب من التوفر والسعر الحالي.':'ملخص من إعلان المعلن على '+platform+'. تأكد من المعلن من التوفر والسعر الحالي. موقع العقار موضح بحسب المعلومات المنشورة في الإعلان.';
