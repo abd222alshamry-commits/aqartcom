@@ -1,0 +1,93 @@
+package com.aqartkom.nativeapp.ui
+
+import android.app.Application
+import android.graphics.Bitmap
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.LayoutDirection
+import com.aqartkom.nativeapp.ui.screens.SectionsScreen
+import com.aqartkom.nativeapp.ui.screens.ServicesScreen
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, sdk = [34], qualifiers = "ar-rSA-w393dp-h852dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class ModernInterfaceTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test fun startScreenKeepsAllEntrypointsAndThemeSwitch() {
+        var opened = ""
+        compose.setContent {
+            var dark by remember { mutableStateOf(false) }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AqartkomTheme(dark) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        SectionsScreen(Modifier, { opened = "properties" }, { opened = "hotels" }, { opened = "account" }, { opened = "services" }, { opened = "sol" }, dark) { dark = !dark }
+                    }
+                }
+            }
+        }
+        snapshot("01-start-light")
+        compose.onNodeWithContentDescription("تغيير المظهر").performClick()
+        snapshot("02-start-dark")
+        compose.onNodeWithContentDescription("حسابي").performClick()
+        assertEquals("account", opened)
+        tapItem("استكشف العقارات")
+        assertEquals("properties", opened)
+        tapItem("استكشف الفنادق واحجز")
+        assertEquals("hotels", opened)
+        tapItem("دع سول يساعدك")
+        assertEquals("sol", opened)
+        snapshot("03-start-dark-services")
+        tapItem("الخدمات ولوحات الإدارة")
+        assertEquals("services", opened)
+    }
+
+    @Test fun guestServicesHaveWorkingDestinationsWithoutAdminTools() {
+        var opened = ""
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AqartkomTheme(false) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        ServicesScreen(Modifier, null, { opened = it }, { opened = "history" })
+                    }
+                }
+            }
+        }
+        snapshot("04-services")
+        compose.onNodeWithText("سول — مساعدك الخاص").performClick()
+        assertEquals("/sol.html", opened)
+        tapItem("بوابة أصحاب الفنادق والمؤجرين")
+        assertEquals("/host-portal.html", opened)
+        compose.onNodeWithText("لوحة الإدارة").assertDoesNotExist()
+        compose.onNodeWithText("المشرفون والصلاحيات").assertDoesNotExist()
+        tapItem("الحجوزات المحفوظة في هذا التطبيق")
+        assertEquals("history", opened)
+    }
+
+    private fun tapItem(label: String) {
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(label))
+        compose.onNodeWithText(label).performClick()
+    }
+
+    private fun snapshot(name: String) {
+        compose.waitForIdle()
+        val target = File("build/outputs/interface-previews", "$name.png")
+        target.parentFile.mkdirs()
+        target.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+}

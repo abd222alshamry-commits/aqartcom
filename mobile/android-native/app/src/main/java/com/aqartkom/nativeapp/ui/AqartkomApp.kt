@@ -12,6 +12,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,8 +36,8 @@ import com.aqartkom.nativeapp.data.*
 import com.aqartkom.nativeapp.ui.screens.*
 
 private enum class Destination(val label: String, val icon: ImageVector) {
-    Services("الخدمات", Icons.Default.Dashboard), Sections("القسمان", Icons.Default.Apps), Home("العقارات", Icons.Default.Home), Search("البحث", Icons.Default.Search), Hotels("الفنادق", Icons.Default.Hotel),
-    Add("أضف عقارك", Icons.Default.Add), Map("الخريطة", Icons.Default.Map), Account("حسابي", Icons.Default.PersonOutline)
+    Services("الخدمات", Icons.Default.GridView), Sections("الرئيسية", Icons.Default.Apps), Home("العقارات", Icons.Default.HomeWork), Search("البحث", Icons.Default.Search), Hotels("الفنادق", Icons.Default.Hotel),
+    Add("أضف", Icons.Default.Add), Map("الخريطة", Icons.Default.Map), Account("حسابي", Icons.Default.PersonOutline)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,7 +116,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
     }
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
         if (destination != Destination.Sections) Surface {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton({ destination = Destination.Sections }) { Icon(Icons.Default.Apps, "اختيار القسم") }
                 FilterChip(selected = destination in listOf(Destination.Home, Destination.Search, Destination.Add, Destination.Map), onClick = { destination = Destination.Home }, label = { Text("العقارات") })
                 FilterChip(selected = destination == Destination.Hotels, onClick = { openSite("/hotels.html") }, label = { Text("الفنادق والحجوزات") })
@@ -125,7 +128,14 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
             if (compared.isNotEmpty() && destination != Destination.Hotels) Surface(onClick = { collection = CollectionPage.Compare }, color = Navy, contentColor = Color.White, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(14.dp)) {
                 Row(Modifier.padding(horizontal = 15.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CompareArrows, null, tint = Gold); Text("مقارنة العقارات (${compared.size}/3)", Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.labelLarge); Text("عرض", color = Gold); Icon(Icons.Default.ChevronLeft, null, tint = Gold) }
             }
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 4.dp
+            ) {
+            NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0)) {
                 (if (destination == Destination.Hotels || destination == Destination.Account) listOf(Destination.Sections, Destination.Hotels, Destination.Services, Destination.Account)
                 else listOf(Destination.Home, Destination.Search, Destination.Add, Destination.Services, Destination.Account)).forEach { item ->
                     NavigationBarItem(selected = destination == item, onClick = {
@@ -134,11 +144,12 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
                         if (item == Destination.Map) { mapFromSearch = false; mapProperty = null }
                         if (item == Destination.Hotels) openSite("/hotels.html") else destination = item
                     }, icon = {
-                        if (item == Destination.Add) Surface(color = Navy, shape = RoundedCornerShape(12.dp)) { Icon(item.icon, null, Modifier.padding(7.dp), tint = Gold) }
+                        if (item == Destination.Add) Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(14.dp)) { Icon(item.icon, null, Modifier.padding(8.dp), tint = MaterialTheme.colorScheme.onPrimary) }
                         else Icon(item.icon, null)
-                    }, label = { Text(item.label, fontSize = 10.sp, maxLines = 1) }, alwaysShowLabel = true,
-                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer))
+                    }, label = { Text(item.label, fontSize = 11.sp, maxLines = 1) }, alwaysShowLabel = true,
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer, selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer, selectedTextColor = MaterialTheme.colorScheme.primary, unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant, unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant))
                 }
+            }
             }
         }
         }
@@ -146,7 +157,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
         AnimatedContent(targetState = destination, transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(100)) }, label = "main-navigation") { page ->
             pageState.SaveableStateProvider(page.name) {
                 when (page) {
-                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { openSite("/hotels.html") }, { destination = Destination.Account }, { destination = Destination.Services }, { openSite("/sol.html") })
+                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { openSite("/hotels.html") }, { destination = Destination.Account }, { destination = Destination.Services }, { openSite("/sol.html") }, darkMode, toggleDarkMode)
                     Destination.Services -> ServicesScreen(Modifier.padding(padding), user, ::openSite) { hotelsViewModel.history(); destination = Destination.Hotels }
                     Destination.Home -> HomeScreen(Modifier.padding(padding), home, favorites, compared.map { it.id }.toSet(), darkMode, toggleDarkMode,
                         { collection = CollectionPage.Favorites }, viewModel::openProperty, viewModel::toggleFavorite, viewModel::toggleCompare,
