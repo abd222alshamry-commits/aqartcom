@@ -2,15 +2,17 @@ package com.aqartkom.nativeapp.ui
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.LayoutDirection
 import com.aqartkom.nativeapp.ui.screens.SectionsScreen
 import com.aqartkom.nativeapp.ui.screens.ServicesScreen
@@ -27,7 +29,7 @@ import java.io.File
 @Config(application = Application::class, sdk = [34], qualifiers = "ar-rSA-w393dp-h852dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ModernInterfaceTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test fun startScreenKeepsAllEntrypointsAndThemeSwitch() {
         var opened = ""
@@ -87,7 +89,16 @@ class ModernInterfaceTest {
     private fun snapshot(name: String) {
         compose.waitForIdle()
         val target = File("build/outputs/interface-previews", "$name.png")
-        target.parentFile.mkdirs()
-        target.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        target.parentFile?.mkdirs()
+        // Render the real Compose view through Robolectric's native Canvas.
+        // PixelCopy's pre-draw callback cannot complete in this host-side test.
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            check(view.width > 0 && view.height > 0)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            target.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            bitmap.recycle()
+        }
     }
 }
