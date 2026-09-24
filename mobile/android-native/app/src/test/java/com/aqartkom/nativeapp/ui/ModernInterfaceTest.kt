@@ -32,9 +32,7 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [34], qualifiers = "ar-rSA-w393dp-h852dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class ModernInterfaceTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-
+class ModernInterfaceTest : InterfaceScreenshotTest() {
     @Test fun startScreenKeepsAllEntrypointsAndThemeSwitch() {
         var opened = ""
         compose.setContent {
@@ -60,23 +58,6 @@ class ModernInterfaceTest {
         assertEquals("sol", opened)
         tapItem("الخدمات ولوحات الإدارة")
         assertEquals("services", opened)
-    }
-
-    @Test fun darkStartScreenRenders() {
-        // Use a fresh activity for each visual baseline. Host-side native
-        // rendering drops unchanged cached layers after a theme recomposition.
-        // Theme switching and navigation remain covered in the test above.
-        compose.setContent {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                AqartkomTheme(true) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        SectionsScreen(Modifier, {}, {}, {}, {}, {}, true, {})
-                    }
-                }
-            }
-        }
-        compose.onNodeWithText("إقامة تستحقها").assertIsDisplayed()
-        snapshot("02-start-dark")
     }
 
     @Test fun guestServicesHaveWorkingDestinationsWithoutAdminTools() {
@@ -105,8 +86,33 @@ class ModernInterfaceTest {
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(label))
         compose.onNodeWithText(label).performClick()
     }
+}
 
-    private fun snapshot(name: String) {
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, sdk = [34], qualifiers = "ar-rSA-w393dp-h852dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class DarkInterfaceTest : InterfaceScreenshotTest() {
+    @Test fun darkStartScreenRenders() {
+        // A separate worker prevents native graphics state from earlier light
+        // captures from affecting this baseline. Theme toggling is tested above.
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AqartkomTheme(true) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        SectionsScreen(Modifier, {}, {}, {}, {}, {}, true, {})
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("إقامة تستحقها").assertIsDisplayed()
+        snapshot("02-start-dark")
+    }
+}
+
+abstract class InterfaceScreenshotTest {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    protected fun snapshot(name: String) {
         compose.waitForIdle()
         val target = File("build/outputs/interface-previews", "$name.png")
         target.parentFile?.mkdirs()

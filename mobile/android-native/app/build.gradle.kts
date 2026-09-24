@@ -34,6 +34,8 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.maxHeapSize = "2g"
+            // Isolate native graphics state between screenshot test classes.
+            it.forkEvery = 1
             it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
             it.jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED")
         }
