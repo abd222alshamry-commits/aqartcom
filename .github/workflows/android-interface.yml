@@ -1,0 +1,44 @@
+name: Android interface verification
+on:
+  pull_request:
+    paths: ['mobile/android-native/**', '.github/workflows/android-interface.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+          cache-read-only: false
+      - name: Build release and run regression tests
+        working-directory: mobile/android-native
+        run: gradle --no-daemon :app:assembleRelease :app:testDebugUnitTest
+      - name: Prepare Android signing and verification tools
+        if: always()
+        run: |
+          tools_dir="$ANDROID_HOME/build-tools/35.0.0"
+          output_dir="mobile/android-native/app/build/outputs/verification-tools"
+          mkdir -p "$output_dir"
+          cp "$tools_dir/lib/apksigner.jar" "$tools_dir/zipalign" "$tools_dir/aapt2" "$output_dir/"
+          if [ -d "$tools_dir/lib64" ]; then cp -R "$tools_dir/lib64" "$output_dir/lib64"; fi
+          if [ -f "$tools_dir/NOTICE.txt" ]; then cp "$tools_dir/NOTICE.txt" "$output_dir/"; fi
+      - name: Save unsigned build, previews and test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqartkom-1.6.0-interface-verification
+          path: |
+            mobile/android-native/app/build/outputs/apk/release/*.apk
+            mobile/android-native/app/build/outputs/interface-previews/
+            mobile/android-native/app/build/outputs/verification-tools/
+            mobile/android-native/app/build/reports/tests/
+            mobile/android-native/app/build/test-results/
+          retention-days: 14

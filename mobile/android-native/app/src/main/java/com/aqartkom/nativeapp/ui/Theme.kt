@@ -15,26 +15,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-val Navy = Color(0xFF0A2540)
-val Blue = Color(0xFF1261A0)
-val Gold = Color(0xFFD5A021)
-val Surface = Color(0xFFF6F7FA)
-val Ink = Color(0xFF152238)
+val Navy = Color(0xFF102E3D)
+val Blue = Color(0xFF087E86)
+val Teal = Color(0xFF087F79)
+val Mint = Color(0xFFBDEEE0)
+val Gold = Color(0xFFE3BC78)
+val Surface = Color(0xFFF4F7F7)
+val Ink = Color(0xFF182F3B)
 
 private val LightColors = lightColorScheme(
-    primary = Navy, onPrimary = Color.White, secondary = Gold, onSecondary = Navy,
+    primary = Teal, onPrimary = Color.White, secondary = Navy, onSecondary = Color.White,
+    tertiary = Color(0xFF825B24), onTertiary = Color.White,
     background = Surface, onBackground = Ink, surface = Color.White, onSurface = Ink,
-    primaryContainer = Color(0xFFE7EDF4), onPrimaryContainer = Navy,
-    secondaryContainer = Color(0xFFFFF0C8), onSecondaryContainer = Color(0xFF614700),
-    surfaceVariant = Color(0xFFEAF0F6), onSurfaceVariant = Color(0xFF657286),
-    outline = Color(0xFF98A6B8), outlineVariant = Color(0xFFE1E6ED)
+    primaryContainer = Color(0xFFDDF3EB), onPrimaryContainer = Color(0xFF064E49),
+    secondaryContainer = Color(0xFFE5EDF2), onSecondaryContainer = Navy,
+    tertiaryContainer = Color(0xFFFFEBCD), onTertiaryContainer = Color(0xFF614218),
+    surfaceVariant = Color(0xFFECF2F2), onSurfaceVariant = Color(0xFF536971),
+    outline = Color(0xFF789098), outlineVariant = Color(0xFFDDE7E7)
 )
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF8CC8FF), onPrimary = Color(0xFF002E52), secondary = Color(0xFFFFD36A),
-    background = Color(0xFF091522), onBackground = Color(0xFFE7EEF6), surface = Color(0xFF102334), onSurface = Color(0xFFE7EEF6),
-    primaryContainer = Color(0xFF213E56), onPrimaryContainer = Color(0xFFD4E9FC),
-    secondaryContainer = Color(0xFF4C3B15), onSecondaryContainer = Color(0xFFFFDF97),
-    surfaceVariant = Color(0xFF1A3043), onSurfaceVariant = Color(0xFFAEBFD0), outline = Color(0xFF6F8799), outlineVariant = Color(0xFF293D50)
+    primary = Color(0xFF88DCC9), onPrimary = Color(0xFF003C35), secondary = Color(0xFFB6CEDD), onSecondary = Navy,
+    tertiary = Gold, onTertiary = Color(0xFF422D0F),
+    background = Color(0xFF0D1B23), onBackground = Color(0xFFE5EFEE), surface = Color(0xFF142831), onSurface = Color(0xFFE5EFEE),
+    primaryContainer = Color(0xFF184A44), onPrimaryContainer = Color(0xFFBEF3E4),
+    secondaryContainer = Color(0xFF263D4B), onSecondaryContainer = Color(0xFFDBEAF2),
+    tertiaryContainer = Color(0xFF493A24), onTertiaryContainer = Color(0xFFFFDFAC),
+    surfaceVariant = Color(0xFF213840), onSurfaceVariant = Color(0xFFB1C5C9), outline = Color(0xFF839EA4), outlineVariant = Color(0xFF304951)
 )
 
 private fun text(size: Int, height: Int, weight: FontWeight = FontWeight.Normal) = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = weight, fontSize = size.sp, lineHeight = height.sp)
@@ -48,5 +54,5 @@ private val AppTypography = Typography(
 @Composable
 fun AqartkomTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, typography = AppTypography,
-        shapes = Shapes(small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(18.dp), large = RoundedCornerShape(24.dp)), content = content)
+        shapes = Shapes(extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(14.dp), medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(32.dp)), content = content)
 }

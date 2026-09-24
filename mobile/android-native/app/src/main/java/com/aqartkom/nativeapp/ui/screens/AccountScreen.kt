@@ -76,7 +76,7 @@ fun AccountScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy
 @Composable private fun AuthScreen(modifier: Modifier, viewModel: AppViewModel, busy: Boolean, done: () -> Unit) {
     var register by remember { mutableStateOf(false) }; var name by remember { mutableStateOf("") }; var email by remember { mutableStateOf("") }; var phone by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.primary) { Icon(Icons.Default.HomeWork, null, Modifier.padding(18.dp).size(42.dp), tint = Color.White) }
+        Surface(shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.primary) { Icon(Icons.Default.HomeWork, null, Modifier.padding(18.dp).size(42.dp), tint = MaterialTheme.colorScheme.onPrimary) }
         Spacer(Modifier.height(14.dp)); Text(if (register) "أنشئ حسابك" else "مرحبًا بعودتك", fontSize = 28.sp, fontWeight = FontWeight.Black)
         Text(if (register) "انضم إلى مجتمع عقارتكم" else "سجّل الدخول لإدارة عقاراتك ومفضّلتك", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(26.dp))

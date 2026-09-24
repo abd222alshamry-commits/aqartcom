@@ -13,8 +13,8 @@ android {
         applicationId = "com.aqartkom.mobileapp.v2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 150
-        versionName = "1.5.0"
+        versionCode = 160
+        versionName = "1.6.0"
         buildConfigField("String", "API_ORIGIN", "\"https://aqartcom-v93.onrender.com\"")
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -30,6 +30,16 @@ android {
         jniLibs.useLegacyPackaging = true
     }
     lint { checkReleaseBuilds = false }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.maxHeapSize = "2g"
+            // Isolate native graphics state between screenshot test classes.
+            it.forkEvery = 1
+            it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            it.jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED")
+        }
+    }
 }
 
 dependencies {
@@ -54,4 +64,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

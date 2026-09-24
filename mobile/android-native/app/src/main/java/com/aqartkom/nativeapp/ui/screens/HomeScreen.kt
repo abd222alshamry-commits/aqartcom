@@ -16,18 +16,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.aqartkom.nativeapp.R
 import com.aqartkom.nativeapp.data.*
 import com.aqartkom.nativeapp.ui.Gold
 import com.aqartkom.nativeapp.ui.Navy
+import com.aqartkom.nativeapp.ui.Mint
+import com.aqartkom.nativeapp.ui.BrandMark
+import com.aqartkom.nativeapp.ui.FeatureIcon
 import com.aqartkom.nativeapp.ui.VideoThumbnail
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -50,10 +52,10 @@ fun HomeScreen(
     Column(modifier.fillMaxSize()) {
         Surface(color = MaterialTheme.colorScheme.surface) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = RoundedCornerShape(14.dp), color = Navy) { Icon(Icons.Default.Apartment, null, Modifier.padding(10.dp).size(28.dp), tint = Gold) }
+                BrandMark()
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text("عقارتكم", fontSize = 23.sp, fontWeight = FontWeight.Black)
-                    Text("منصة العقارات السورية", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("اكتشف مكانك القادم", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onDarkMode) { Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "تغيير المظهر") }
                 IconButton(onFavorites) {
@@ -75,7 +77,7 @@ fun HomeScreen(
                         SectionHeading("أين تبحث؟", "اختر مدينتك")
                         Spacer(Modifier.height(10.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            rowItems(SyrianCities) { city -> SuggestionChip(onClick = { onSearch(SearchFilters(city = city)) }, label = { Text(city) }, icon = { Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = Gold) }, shape = RoundedCornerShape(14.dp)) }
+                            rowItems(SyrianCities) { city -> SuggestionChip(onClick = { onSearch(SearchFilters(city = city)) }, label = { Text(city) }, icon = { Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary) }, shape = RoundedCornerShape(50)) }
                         }
                     }
                 }
@@ -106,14 +108,15 @@ fun HomeScreen(
 
 @Composable private fun DiscoveryHero(onSearch: (SearchFilters) -> Unit) {
     var mode by rememberSaveable { mutableStateOf("بيع") }
-    Surface(shape = RoundedCornerShape(26.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column {
-            // Use the same artwork as the website; keep it separate from the text.
-            Image(painterResource(R.drawable.syria_panorama), "معالم سوريا وأبراج ومبانٍ سكنية — صورة واجهة فنية", Modifier.fillMaxWidth().aspectRatio(2f), contentScale = ContentScale.Fit)
+            // A compact search introduction; the original artwork stays on the start screen.
+            Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Navy, Color(0xFF165A5C)))).padding(22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("خطوتك القادمة", style = MaterialTheme.typography.labelLarge, color = Mint)
+                Text("مساحة تحبّها،\nوحياة تختارها.", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                Text("بيع وإيجار في المدن والأحياء السورية", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD1E5E4))
+            }
             Column(Modifier.padding(18.dp)) {
-                Text("مكانك القادم يبدأ هنا", style = MaterialTheme.typography.headlineSmall)
-                Text("اكتشف العقارات في المدن والأحياء السورية", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("بيع" to "شراء عقار", "إيجار" to "استئجار").forEach { (value, label) ->
                         FilterChip(mode == value, { mode = value }, { Text(label) }, leadingIcon = { Icon(if (value == "بيع") Icons.Default.HomeWork else Icons.Default.Key, null, Modifier.size(17.dp)) }, shape = RoundedCornerShape(12.dp))
@@ -124,7 +127,7 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Search, null, Modifier.padding(4.dp).size(23.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("مدينة، حي، أو نوع العقار", Modifier.weight(1f).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                        Surface(color = Navy, shape = RoundedCornerShape(11.dp)) { Icon(Icons.Default.ArrowBack, "بحث", Modifier.padding(12.dp), tint = Color.White) }
+                        Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.ArrowBack, "بحث", Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.onPrimary) }
                     }
                 }
             }
@@ -133,10 +136,10 @@ fun HomeScreen(
 }
 
 @Composable private fun QuickAction(title: String, subtitle: String, icon: ImageVector, modifier: Modifier, click: () -> Unit) {
-    Surface(onClick = click, modifier = modifier, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+    Surface(onClick = click, modifier = modifier, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.padding(15.dp)) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(27.dp))
-            Spacer(Modifier.height(10.dp)); Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            FeatureIcon(icon)
+            Spacer(Modifier.height(10.dp)); Text(title, style = MaterialTheme.typography.titleSmall)
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -159,6 +162,7 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun PropertyCard(property: Property, favorite: Boolean, onOpen: () -> Unit, onFavorite: () -> Unit, compared: Boolean = false, onCompare: (() -> Unit)? = null, compact: Boolean = false) {
     Surface(onClick = onOpen, shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         if (compact) {
@@ -176,7 +180,7 @@ fun HomeScreen(
             }
         } else Column {
             Box {
-                PropertyCover(property, Modifier.fillMaxWidth().aspectRatio(1.65f))
+                PropertyCover(property, Modifier.fillMaxWidth().aspectRatio(1.48f))
                 Row(Modifier.align(Alignment.TopStart).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CardBadge(if (property.mode == "إيجار") "للإيجار" else "للبيع", Navy)
                     if (property.sponsored) CardBadge("ممول", Color(0xFF735610)) else if (property.featured) CardBadge("مميز", Color(0xFF735610))
@@ -190,9 +194,9 @@ fun HomeScreen(
                     Text(property.type, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(5.dp)); Text(property.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(5.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = Gold); Text(location(property), Modifier.padding(start = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Spacer(Modifier.height(5.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(location(property), Modifier.padding(start = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Spacer(Modifier.height(13.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) { Fact("${property.area?.toInt() ?: "—"} م²", Icons.Default.SquareFoot); Fact("${property.rooms ?: "—"} غرف", Icons.Default.Bed); Fact("${property.baths ?: "—"} حمام", Icons.Default.Bathtub) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Fact("${property.area?.toInt() ?: "—"} م²", Icons.Default.SquareFoot); Fact("${property.rooms ?: "—"} غرف", Icons.Default.Bed); Fact("${property.baths ?: "—"} حمام", Icons.Default.Bathtub) }
                 HorizontalDivider(Modifier.padding(top = 14.dp), color = MaterialTheme.colorScheme.outlineVariant)
                 Row(Modifier.fillMaxWidth().heightIn(min = 42.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (property.sourceKind == "office") Icons.Default.Storefront else Icons.Default.PersonOutline, null, Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -223,7 +227,7 @@ fun price(p: Property): String = if (p.price <= 0) "السعر لدى المعل
 
 @Composable fun PropertySkeleton() {
     Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surface) {
-        Column { Box(Modifier.fillMaxWidth().aspectRatio(1.65f).background(MaterialTheme.colorScheme.surfaceVariant)); Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { repeat(3) { Box(Modifier.fillMaxWidth(if (it == 2) .5f else .85f).height(13.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) } } }
+        Column { Box(Modifier.fillMaxWidth().aspectRatio(1.48f).background(MaterialTheme.colorScheme.surfaceVariant)); Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { repeat(3) { Box(Modifier.fillMaxWidth(if (it == 2) .5f else .85f).height(13.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) } } }
     }
 }
 @Composable fun LoadingPane() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }

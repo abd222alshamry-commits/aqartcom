@@ -1,6 +1,6 @@
 <resources>
-    <color name="brand_navy">#0A2540</color>
-    <color name="brand_blue">#1261A0</color>
-    <color name="brand_gold">#D5A021</color>
-    <color name="brand_surface">#F7F9FC</color>
+    <color name="brand_navy">#102E3D</color>
+    <color name="brand_blue">#087F79</color>
+    <color name="brand_gold">#E3BC78</color>
+    <color name="brand_surface">#F4F7F7</color>
 </resources>
