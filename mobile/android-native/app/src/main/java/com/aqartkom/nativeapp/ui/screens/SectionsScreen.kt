@@ -56,8 +56,8 @@ fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () ->
             item {
                 Surface(onClick = onProperties, shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                     Column {
-                        Box(Modifier.fillMaxWidth().background(Color(0xFFF2F5F4))) {
-                            Image(painterResource(R.drawable.syria_panorama), "رسم لمعالم سوريا والمباني السكنية", Modifier.fillMaxWidth().aspectRatio(3f), contentScale = ContentScale.Fit)
+                        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)) {
+                            Image(painterResource(R.drawable.syria_panorama), "رسم لمعالم سوريا والمباني السكنية", Modifier.fillMaxWidth().aspectRatio(3f), contentScale = ContentScale.Crop)
                         }
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

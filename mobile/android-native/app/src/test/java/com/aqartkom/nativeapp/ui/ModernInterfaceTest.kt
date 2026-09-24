@@ -2,7 +2,10 @@ package com.aqartkom.nativeapp.ui
 
 import android.app.Application
 import android.graphics.Bitmap
-import android.graphics.Canvas
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +24,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
@@ -90,15 +94,22 @@ class ModernInterfaceTest {
         compose.waitForIdle()
         val target = File("build/outputs/interface-previews", "$name.png")
         target.parentFile?.mkdirs()
-        // Render the real Compose view through Robolectric's native Canvas.
-        // PixelCopy's pre-draw callback cannot complete in this host-side test.
-        compose.runOnIdle {
+        // Request PixelCopy directly: captureToImage's pre-draw wait does not
+        // complete on the host. Hardware capture also preserves cached layers.
+        var result = -1
+        val bitmap = compose.runOnIdle {
             val view = compose.activity.findViewById<View>(android.R.id.content)
             check(view.width > 0 && view.height > 0)
             val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-            view.draw(Canvas(bitmap))
-            target.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-            bitmap.recycle()
+            val xy = IntArray(2)
+            view.getLocationInWindow(xy)
+            val bounds = Rect(xy[0], xy[1], xy[0] + view.width, xy[1] + view.height)
+            PixelCopy.request(compose.activity.window, bounds, bitmap, { result = it }, Handler(Looper.getMainLooper()))
+            bitmap
         }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(PixelCopy.SUCCESS, result)
+        target.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        bitmap.recycle()
     }
 }
