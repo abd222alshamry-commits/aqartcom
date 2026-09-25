@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://aqartcom-v93.onrender.com"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range"],
+    "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+    "MaxAgeSeconds": 3600
+  }
+]
