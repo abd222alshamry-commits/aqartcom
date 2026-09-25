@@ -31,7 +31,7 @@
   };
  }
  const labels={title:'عنوان الإعلان',name:'اسم المنشأة',type:'نوع العقار',property_type:'نوع العقار',mode:'العملية',listing_mode:'العملية',city:'المدينة / المحافظة',district:'البلدة / الحي',price:'السعر',currency:'العملة',area:'المساحة م²',rooms:'عدد الغرف',baths:'دورات المياه',description:'وصف الإعلان',latitude:'خط العرض',longitude:'خط الطول',phone:'هاتف المعلن',whatsapp:'واتساب المعلن',address:'العنوان',lodging_type:'نوع الإقامة',rental_terms:'شروط التأجير',cancellation_policy:'شروط الإلغاء'};
- const choices={mode:[['بيع','بيع'],['إيجار','إيجار']],listing_mode:[['sale','بيع'],['rent','إيجار']],lodging_type:[['hotel','فندق'],['furnished_apartment','شقة مفروشة'],['farm','مزرعة']],currency:['USD','SYP','EUR','SAR','AED','GBP','KWD','QAR','BHD','OMR','JOD','CAD','AUD','JPY','CHF','SGD'].map(x=>[x,x])};
+ const choices={mode:[['بيع','بيع'],['إيجار','إيجار']],listing_mode:[['sale','بيع'],['rent','إيجار']],lodging_type:[['hotel','فندق'],['furnished_apartment','شقة مفروشة'],['farm','مزرعة'],['chalet','شاليه']],currency:['USD','SYP','EUR','SAR','AED','GBP','KWD','QAR','BHD','OMR','JOD','CAD','AUD','JPY','CHF','SGD'].map(x=>[x,x])};
  function field(name,value,kind){
   const long=['description','rental_terms','cancellation_policy','address'].includes(name),number=['price','area','rooms','baths','latitude','longitude'].includes(name);
   const required=['title','name','city','type','property_type','mode','listing_mode','currency','lodging_type'].includes(name)||(name==='price'&&kind==='property');

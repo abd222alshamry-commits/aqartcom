@@ -1,6 +1,6 @@
 'use strict';
 function hostPath(req){const p=req.path||'';if(/^\/api\/office\/hotels(?:\/\d+)?$/.test(p))return true;if(/^\/api\/office\/hotel-rooms\/\d+(?:\/(rates|blocks))?$/.test(p)||/^\/api\/office\/hotel-(bookings|promotions)\/\d+$/.test(p))return true;return /^\/api\/office\/hotels\/\d+\/(rooms(?:\/\d+(?:\/(images|videos|media))?)?|bookings|reviews(?:\/\d+\/reply)?|stay-settings|images|videos|media|promotions|calendar|availability)$/.test(p)||(/^\/api\/office\/hotels\/\d+\/finance$/.test(p)&&req.method==='GET');}
-const types=['hotel','furnished_apartment','farm'];
+const types=['hotel','furnished_apartment','farm','chalet'];
 function register(app,{pool,requireAuth,requireOfficeMember,ownedHotel}){
  app.post('/api/hosts/enroll',requireAuth,async(req,res)=>{try{if(req.body.accepted!==true)return res.status(400).json({error:'أكد أنك مخوّل بإدارة المنشآت التي ستضيفها'});await pool.query('UPDATE users SET is_host=TRUE,updated_at=NOW() WHERE id=$1',[req.user.id]);res.json({ok:true});}catch(e){res.status(500).json({error:'تعذر تفعيل حساب المستضيف'});}});
  app.get('/api/hosts/dashboard',requireAuth,async(req,res)=>{try{

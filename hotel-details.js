@@ -2,11 +2,11 @@ let hotelRequest = 0;
 async function showHotelDetails(id) {
   const request = ++hotelRequest, body = $('modalBody');
   $('modal').classList.remove('hidden'); document.body.classList.add('hotel-dialog-open');
-  body.innerHTML = '<p role="status">جارٍ تحميل الفندق والصور والفيديوهات…</p>'; $('close').focus();
+  body.innerHTML = '<p role="status">جارٍ تحميل الإقامة والصور والفيديوهات…</p>'; $('close').focus();
   try {
     const response = await fetch('/api/hotels/' + encodeURIComponent(id)), result = await response.json();
     if (request !== hotelRequest) return;
-    if (!response.ok || !result.hotel) throw Error(result.error || 'تعذر تحميل الفندق');
+    if (!response.ok || !result.hotel) throw Error(result.error || 'تعذر تحميل الإقامة');
     const hotel = result.hotel, rooms = Array.isArray(result.rooms) ? result.rooms : [];
     selectedHotel = hotel;
     body.innerHTML = `<h2>${esc(hotel.name)}</h2>
@@ -23,7 +23,7 @@ async function showHotelDetails(id) {
         <button class="room-book" onclick="bookingForm(${Number(id)},${Number(room.id)})">احجز</button></div>`).join('') || '<p>لا توجد وحدات منشورة حاليًا.</p>'}</div>
       <section id="stayReviews" data-hotel="${esc(id)}"><h3>تقييمات الضيوف</h3><p>جارٍ تحميل التقييمات…</p></section>`;
     const media = [...MediaGallery.items(hotel, hotel.name), ...rooms.flatMap(room => MediaGallery.items(room, 'الغرفة: ' + room.name))];
-    MediaGallery.mount($('hotelMedia'), media, 'صور وفيديوهات الفندق والغرف');
+    MediaGallery.mount($('hotelMedia'), media, 'صور وفيديوهات المنشأة والوحدات');
     body.querySelectorAll('[data-room-media]').forEach(host => {
       const room = rooms.find(room => String(room.id) === host.dataset.roomMedia);
       MediaGallery.mount(host, MediaGallery.items(room, 'الغرفة: ' + room.name), 'صور وفيديوهات الغرفة');
@@ -31,7 +31,7 @@ async function showHotelDetails(id) {
     loadPublicReviews(id);
   } catch (error) {
     if (request !== hotelRequest) return;
-    body.innerHTML = '<p role="alert">' + esc(error.message || 'تعذر الاتصال بالفندق') + '</p><button type="button" id="retryHotel">إعادة المحاولة</button>';
+    body.innerHTML = '<p role="alert">' + esc(error.message || 'تعذر الاتصال بالمنشأة') + '</p><button type="button" id="retryHotel">إعادة المحاولة</button>';
     $('retryHotel').onclick = () => showHotelDetails(id);
   }
 }

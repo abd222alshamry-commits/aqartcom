@@ -40,7 +40,7 @@ function validate(kind,input,current) {
    if(['title','name','city','type','property_type','mode','listing_mode','currency','lodging_type'].includes(key)&&!out[key])throw error(400,'العنوان والمدينة والنوع والعملة حقول مطلوبة');
   }
  }
- if(out.mode&&!['بيع','إيجار'].includes(out.mode)||out.listing_mode&&!['sale','rent'].includes(out.listing_mode)||out.lodging_type&&!['hotel','furnished_apartment','farm'].includes(out.lodging_type))throw error(400,'نوع الإعلان أو العملية غير صحيح');
+ if(out.mode&&!['بيع','إيجار'].includes(out.mode)||out.listing_mode&&!['sale','rent'].includes(out.listing_mode)||out.lodging_type&&!['hotel','furnished_apartment','farm','chalet'].includes(out.lodging_type))throw error(400,'نوع الإعلان أو العملية غير صحيح');
  if(out.currency&&!['USD','SYP','EUR','SAR','AED','GBP','KWD','QAR','BHD','OMR','JOD','CAD','AUD','JPY','CHF','SGD'].includes(out.currency))throw error(400,'العملة غير مدعومة');
  for(const key of ['phone','whatsapp'])if(out[key]&&!/^\+[1-9]\d{7,14}$/.test(out[key]))throw error(400,'اكتب رقم التواصل مع رمز الدولة مثل +963…');
  if(kind==='property'){
