@@ -23,7 +23,7 @@ body[data-page=index] .landmarks-hero{display:grid;grid-template-columns:1fr 1fr
 .landmarks-hero .hero-inner{grid-column:1/-1;width:100%;padding:0}
 .priority-shortcuts{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0 18px}
 .priority-shortcuts>span{font-size:13px;color:#d4e5e7;margin-inline-end:4px}
-.priority-shortcuts button,.priority-shortcuts a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #ffffff50;border-radius:24px;background:#ffffff0b;color:#fff;font:700 13px Cairo,Arial,sans-serif;padding:8px 18px;text-decoration:none;cursor:pointer}
+.priority-shortcuts button,.priority-shortcuts a{width:auto;display:inline-flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #ffffff50;border-radius:24px;background:#ffffff0b;color:#fff;font:700 13px Cairo,Arial,sans-serif;padding:8px 18px;text-decoration:none;cursor:pointer}
 .priority-shortcuts button[aria-pressed=true]{background:#d9f3eb;color:#064e4a;border-color:#d9f3eb}
 .priority-shortcuts button:hover,.priority-shortcuts a:hover{border-color:#a7e4d8}
 .priority-shortcuts a{margin-inline-start:auto}
