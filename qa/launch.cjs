@@ -65,6 +65,14 @@ const root=path.resolve(__dirname,'..');
   const video=(await request('/api/me/properties/'+id+'/videos',{method:'POST',cookie:alice.cookie,form:videoForm,expected:201})).value.data[0];uploaded.push(root+video.url);if(video.poster_url)uploaded.push(root+video.poster_url);
   const mediaDetail=(await request('/api/properties/'+id)).value.data;assert.ok(mediaDetail.images.some(x=>x.url===photo.url));assert.ok(video.poster_url);assert.ok(fs.statSync(root+video.poster_url).size>0);assert.equal(mediaDetail.videos.length,1);assert.equal(mediaDetail.videos[0].is_primary,true);
   await request('/api/me/properties/'+id+'/videos',{method:'POST',form:new FormData(),expected:401});
+  await request('/api/me/recommendations',{expected:401});
+  const recommendations=(await request('/api/me/recommendations?limit=3',{cookie:bob.cookie})).value;
+  assert.equal(recommendations.cold_start,true);assert.equal(recommendations.profile.signal_count,0);
+  assert.ok(recommendations.data.some(p=>p.id===id));
+  assert.ok(recommendations.data.every(p=>Number.isFinite(p.personal_score)&&p.personal_score>=0&&p.personal_score<=100));
+  assert.equal(recommendations.data.find(p=>p.id===id).image_url,photo.url);
+  assert.ok((await request('/api/me/recommendations?limit=invalid',{cookie:bob.cookie})).value.data.length>0);
+
   const geo=(await request('/api/properties/geo-search',{method:'POST',body:{center:{lat:34.86,lng:36.25},radiusKm:1}})).value.data;
   const ownedGeo=geo.filter(x=>x.source_kind!=='office');assert.equal(ownedGeo.length,1);assert.equal(ownedGeo[0].id,id);assert.ok(geo.every(x=>!x.is_demo));
   await request('/api/me/dashboard',{cookie:alice.cookie});

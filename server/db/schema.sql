@@ -1260,7 +1260,7 @@ CREATE TABLE IF NOT EXISTS admin_access_events (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_host BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE hotels ADD COLUMN IF NOT EXISTS lodging_type VARCHAR(30) NOT NULL DEFAULT 'hotel' CHECK(lodging_type IN ('hotel','furnished_apartment','farm'));
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS lodging_type VARCHAR(30) NOT NULL DEFAULT 'hotel' CHECK(lodging_type IN ('hotel','furnished_apartment','farm','chalet'));
 ALTER TABLE hotels ADD COLUMN IF NOT EXISTS rental_terms TEXT NOT NULL DEFAULT '';
 ALTER TABLE hotels ADD COLUMN IF NOT EXISTS free_cancel_hours INTEGER NOT NULL DEFAULT 24 CHECK(free_cancel_hours BETWEEN 0 AND 720);
 ALTER TABLE hotels ADD COLUMN IF NOT EXISTS terms_version INTEGER NOT NULL DEFAULT 1;
@@ -1314,3 +1314,14 @@ DROP TRIGGER IF EXISTS keep_deleted_hidden ON market_listings;
 CREATE TRIGGER keep_deleted_hidden BEFORE INSERT OR UPDATE ON market_listings FOR EACH ROW EXECUTE FUNCTION keep_deleted_listing_hidden();
 DROP TRIGGER IF EXISTS keep_deleted_hidden ON hotels;
 CREATE TRIGGER keep_deleted_hidden BEFORE INSERT OR UPDATE ON hotels FOR EACH ROW EXECUTE FUNCTION keep_deleted_listing_hidden();
+
+-- Upgrade existing installations without changing stored accommodation records.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='hotels'::regclass
+    AND conname='hotels_lodging_type_check' AND pg_get_constraintdef(oid) NOT LIKE '%chalet%') THEN
+    ALTER TABLE hotels DROP CONSTRAINT hotels_lodging_type_check;
+    ALTER TABLE hotels ADD CONSTRAINT hotels_lodging_type_check
+      CHECK (lodging_type IN ('hotel','furnished_apartment','farm','chalet'));
+  END IF;
+END $$;

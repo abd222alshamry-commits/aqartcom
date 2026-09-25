@@ -2,7 +2,7 @@
 'use strict';
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const statuses={pending:'بانتظار المراجعة',active:'نشط',published:'منشور',approved:'معتمد وغير منشور',rejected:'مرفوض',inactive:'غير نشط',duplicate:'مكرر'};
-const kinds={property:'عقار',hotel:'إقامة',market:'عرض مكتب / مصدر'},lodgings={hotel:'فندق',furnished_apartment:'شقة مفروشة',farm:'مزرعة'};
+const kinds={property:'عقار',hotel:'إقامة',market:'عرض مكتب / مصدر'},lodgings={hotel:'فندق',furnished_apartment:'شقة مفروشة',farm:'مزرعة',chalet:'شاليه'};
 const actions={edit:'تعديل الإعلان',delete:'حذف الإعلان',create:'إضافة العرض',approve:'اعتماد',reject:'رفض',pending:'إعادة للمراجعة'};
 let page=1,permissions={},current=null,offices=[],loadingId=0,detailId=0;
 async function api(url,options={}){const r=await fetch(url,{credentials:'same-origin',...options}),d=await r.json();if(!r.ok){const e=Error(d.error||'تعذر تنفيذ الطلب');e.status=r.status;throw e;}return d;}

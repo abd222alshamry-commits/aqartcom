@@ -1,0 +1,79 @@
+/* Shared local launch design: navy, teal and clear, compact controls. */
+:root{--launch-ink:#102e3d;--launch-teal:#087f79;--launch-line:#dce7e9;--launch-soft:#f4f7f7}
+body[data-page=index],body[data-page=hotels]{background:var(--launch-soft);color:var(--launch-ink)}
+body[data-page=index] .topbar{height:auto;background:var(--launch-ink)}
+.topbar .nav{min-height:76px;height:auto;gap:20px;padding-block:10px}
+.topbar .brand{min-width:155px}.topbar .logo{border-color:#a7e4d8;color:#a7e4d8}
+.topbar .nav #siteNav{gap:22px;align-items:center;min-width:0}
+.topbar .nav #siteNav>a{white-space:nowrap;padding:12px 0}
+.topbar .nav #siteNav>a.active,.topbar .nav #siteNav>a:hover{color:#a7e4d8;border-color:#a7e4d8}
+.nav-more{position:relative;color:#fff;font-size:13px;font-weight:700}
+.nav-more summary{cursor:pointer;padding:12px 6px;white-space:nowrap;min-height:44px}
+.nav-more-links{position:absolute;top:100%;inset-inline-end:0;min-width:230px;display:grid;gap:3px;padding:10px;background:#153d4b;border:1px solid #ffffff30;border-radius:14px;box-shadow:0 16px 40px #061a2a33;z-index:25}
+.topbar .nav #siteNav .nav-more-links a,.nav-more-links button{font:inherit;color:#fff;background:transparent;text-align:start;text-decoration:none;border:0;border-radius:8px;padding:10px 12px;min-height:44px;cursor:pointer}
+.topbar .nav #siteNav .nav-more-links a:hover,.nav-more-links button:hover{background:#ffffff12}
+.nav-more-links [hidden]{display:none!important}
+body[data-page=index] .landmarks-hero{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:12px 30px;padding:32px max(24px,calc((100% - 1380px)/2)) 28px;background:linear-gradient(125deg,#102e3d,#164e55);color:#fff}
+.launch-heading.container{width:100%;padding:0;margin:0}
+.launch-heading>span{color:#abe4d9;font-size:14px;font-weight:700}
+.launch-heading h1{font-size:clamp(30px,3.4vw,48px);line-height:1.5;margin:10px 0}
+.launch-heading p{font-size:18px;color:#e0ecee;margin:8px 0 18px}
+.landmarks-hero .hero-landmarks{overflow:hidden;border-radius:22px;background:#102e3d}
+.landmarks-hero .hero-landmarks img{height:auto;max-height:265px;aspect-ratio:2/1;object-fit:contain}
+.landmarks-hero .hero-inner{grid-column:1/-1;width:100%;padding:0}
+.priority-shortcuts{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0 18px}
+.priority-shortcuts>span{font-size:13px;color:#d4e5e7;margin-inline-end:4px}
+.priority-shortcuts button,.priority-shortcuts a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #ffffff50;border-radius:24px;background:#ffffff0b;color:#fff;font:700 13px Cairo,Arial,sans-serif;padding:8px 18px;text-decoration:none;cursor:pointer}
+.priority-shortcuts button[aria-pressed=true]{background:#d9f3eb;color:#064e4a;border-color:#d9f3eb}
+.priority-shortcuts button:hover,.priority-shortcuts a:hover{border-color:#a7e4d8}
+.priority-shortcuts a{margin-inline-start:auto}
+body[data-page=index] .searchbox{border-radius:18px;box-shadow:0 14px 40px #061a2a20;padding:0 20px 16px}
+body[data-page=index] .tab{border:0;border-bottom:2px solid #e4ecee;background:transparent;color:#46606b;padding:14px 12px}
+body[data-page=index] .tab.active{border-color:var(--launch-teal);color:var(--launch-teal);background:#ecf8f4}
+body[data-page=index] .searchbtn,body[data-page=hotels] .hero button[type=submit],body[data-page=hotels] #hotelSearchButton{background:var(--launch-teal);color:#fff}
+body[data-page=index] #saveSearchBtn{font:inherit;font-size:12px;border:1px solid var(--launch-line);border-radius:8px;min-height:44px;background:#f4f7f7;color:#365463}
+body[data-page=index] .section{padding-top:32px}.head small{color:var(--launch-teal)}
+body[data-page=index] .property-card,body[data-page=index] .marei-card{border-radius:16px;border-color:var(--launch-line);box-shadow:0 5px 20px #102e3d08}
+body[data-page=index] .categories{padding-top:20px}
+body[data-page=hotels]>header{min-height:76px;height:auto;padding-block:12px;gap:15px;background:var(--launch-ink);color:#fff}
+body[data-page=hotels] .brand,body[data-page=hotels] .brand small,body[data-page=hotels] .hotel-nav a{color:#e4f0ef}
+body[data-page=hotels] .hotel-nav{gap:14px;font-size:13px}
+body[data-page=hotels] .hotel-nav a{text-decoration:none}
+body[data-page=hotels] .hotel-nav .manage-hotels,body[data-page=hotels] .hotel-owner-entry>a{background:var(--launch-teal)}
+body[data-page=hotels] .hero{background:linear-gradient(125deg,#102e3d,#164e55);padding-block:32px;gap:14px}
+body[data-page=hotels] .hero h1{font-size:clamp(26px,3.5vw,42px);line-height:1.6}
+body[data-page=hotels] .hero form{padding:20px;gap:12px;border-radius:18px}
+body[data-page=hotels] .priority-shortcuts{margin:0 0 8px}
+body[data-page=hotels] .hotel-owner-entry{margin:24px 6% 0;max-width:none;background:#e7f4f0;border-color:#c8e5db}
+body[data-page=hotels] .hotel-owner-entry p{line-height:1.9;max-width:780px}
+body[data-page=hotels] .hotel-owner-entry>a{white-space:nowrap}
+body[data-page=hotels] .card button:not(.hotel-name):not(.hotel-open-photo){background:var(--launch-teal)}
+body[data-page=hotels] #hotelSearchStatus{margin:0;line-height:1.8}#hotelSearchStatus:empty{display:none}
+.demo-choice{display:flex;align-items:center;gap:8px;margin:0 0 20px;font-size:13px;color:#526975;min-height:36px;cursor:pointer}
+.demo-choice input{accent-color:var(--launch-teal);width:18px;height:18px}
+.stay-empty{grid-column:1/-1;text-align:center;padding:36px 20px;background:#fff;border:1px dashed #bdcfd3;border-radius:18px;line-height:1.9}
+.stay-empty h3{margin:0}.stay-empty a{display:inline-block;margin-top:8px;padding:10px 20px;background:var(--launch-teal);color:#fff;border-radius:10px;text-decoration:none}
+body[data-page=hosts] .host-hero{background:linear-gradient(125deg,#102e3d,#164e55)}
+.launch-owner-guide{line-height:1.9}.launch-owner-guide h2{margin:8px 0}.launch-owner-guide ol{padding-inline-start:24px}.launch-owner-guide li{margin:7px 0}.launch-kicker{font-size:13px;font-weight:700;color:var(--launch-teal)}
+:where(.priority-shortcuts button,.priority-shortcuts a,.nav-more summary,.nav-more-links a,.nav-more-links button):focus-visible{outline:3px solid #b3e9dd;outline-offset:3px}
+html[data-theme=dark] body[data-page=index],html[data-theme=dark] body[data-page=hotels]{background:var(--bg);color:var(--night-text)}
+html[data-theme=dark] .priority-shortcuts button[aria-pressed=true]{background:#246561!important;border-color:#95d8cb!important}
+html[data-theme=dark] :is(.hotel-owner-entry,.stay-empty){background:#142c37!important;color:var(--night-text);border-color:#385865!important}
+html[data-theme=dark] .hotel-owner-entry p,html[data-theme=dark] .demo-choice{color:#bdd2db}
+html[data-theme=dark] body[data-page=index] .tab.active{background:#246561!important;color:#fff!important;border-color:#95d8cb!important}
+@media(min-width:801px) and (max-width:1150px){.topbar .nav{gap:12px;flex-wrap:wrap}.topbar .nav #siteNav{order:3;flex-basis:100%;justify-content:center;border-top:1px solid #ffffff18;padding-top:4px}.topbar .actions{margin-inline-start:auto}}
+@media(max-width:800px){
+ body[data-page=index] .landmarks-hero{grid-template-columns:1fr;padding:22px 16px;gap:14px}
+ .launch-heading h1{font-size:30px;margin:4px 0}.launch-heading p{font-size:15px;margin:4px 0}
+ .landmarks-hero .hero-landmarks{display:block}.landmarks-hero .hero-landmarks img{max-height:180px}
+ .priority-shortcuts{gap:8px}.priority-shortcuts button,.priority-shortcuts a{font-size:12px;padding:8px 14px}.priority-shortcuts a{margin:0;flex-basis:100%;justify-content:flex-start;border:0;padding-inline:0}
+ .topbar .nav #siteNav{align-items:stretch;gap:4px;grid-template-columns:1fr 1fr}
+ .topbar .nav #siteNav .nav-more{grid-column:1/-1}.nav-more summary{text-align:center;border:1px solid #ffffff30;border-radius:8px}
+ .nav-more-links{position:static;min-width:0;box-shadow:none;border:0;padding:6px 0;grid-template-columns:1fr 1fr;background:transparent}
+ .topbar .nav #siteNav .nav-more-links a,.nav-more-links button{font-size:11px;text-align:center;padding:8px 4px}
+ body[data-page=index] .searchbox{padding:0 12px 14px}
+ body[data-page=hotels] .hotel-owner-entry{margin:20px 16px 0}
+ body[data-page=hotels] .hero form{padding:14px}
+}
+@media(max-width:520px){.topbar .brand{min-width:0}.topbar .nav{padding:8px 0;gap:8px}.topbar .actions{gap:4px}.topbar .nav #siteNav{max-height:min(430px,calc(100dvh - 100px))}body[data-page=hotels] .hero form{grid-template-columns:repeat(2,minmax(0,1fr))}body[data-page=hotels] #q,body[data-page=hotels] #hotelSearchButton{grid-column:1/-1}body[data-page=hotels] .hotel-nav{gap:8px;font-size:11px}body[data-page=hotels] .hotel-nav .manage-hotels{padding:8px}.hotel-owner-entry h2{font-size:20px}.hotel-owner-entry p{font-size:13px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

@@ -105,3 +105,23 @@ test('only completed-date booking owners can review once; hosts can reply but ca
  for(const privateField of ['user_id','booking_id','booking_code','guest_email','guest_phone'])assert.equal(privateField in publicReview,false);
  const dashboard=(await call('/api/hosts/dashboard','host')).json.data[0];assert.equal(dashboard.review_count,1);assert.equal(Number(dashboard.review_score),4);
 });
+
+test('chalets can be created, reviewed, searched in Mashta and booked; demo stays are opt-in',async t=>{
+ const {db,call,enroll,create,addRoom}=await setup(t);await enroll('host');
+ const h=await create('host','chalet'),room=await addRoom(h.id);
+ assert.equal(h.status,'pending');assert.equal(h.lodging_type,'chalet');
+ assert.equal((await call('/api/hotels?lodging_type=chalet')).json.data.length,0);
+ await db.query("UPDATE hotels SET city='طرطوس',district='مشتى الحلو',status='active' WHERE id=$1",[h.id]);
+ const demo=(await db.query("INSERT INTO hotels(name,slug,city,status,lodging_type) VALUES('تجريبي — شاليه','aqartkom-demo-hotel-v1-chalet','دمشق','active','chalet') RETURNING id")).rows[0];
+ assert.deepEqual((await call('/api/hotels?lodging_type=chalet')).json.data.map(x=>x.id),[h.id]);
+ assert.equal((await call('/api/hotels?includeDemo=true&lodging_type=chalet')).json.data.length,2);
+ assert.deepEqual((await call('/api/hotels?region=mashta&lodging_type=chalet')).json.data.map(x=>x.id),[h.id]);
+ assert.equal((await call('/api/hotels?city='+encodeURIComponent('دمشق'))).json.data.length,0);
+ assert.equal((await call('/api/hotels?checkIn=2099-03-12&checkOut=2099-03-10')).status,400);
+ const fields={hotel_id:h.id,room_id:room.id,check_in:'2099-03-10',check_out:'2099-03-12',adults:2,rooms_count:1};
+ const quote=(await call('/api/mobile/hotels/quote?'+new URLSearchParams(fields))).json.data;
+ assert.equal(quote.total,200);
+ const booked=await call('/api/mobile/hotels/book','guest','POST',{...fields,guest_name:'QA Chalet Guest',guest_phone:'12345678',payment_method:'pay_at_hotel',expected_total:quote.total,expected_currency:quote.currency,expected_terms_version:quote.terms_version,idempotency_key:crypto.randomUUID()});
+ assert.equal(booked.status,201,JSON.stringify(booked));
+ assert.equal((await db.query('SELECT COUNT(*)::int n FROM hotels WHERE id=$1',[demo.id])).rows[0].n,1,'Hiding demos never deletes them');
+});
