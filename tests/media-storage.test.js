@@ -101,4 +101,12 @@ test('property and hotel routes commit remote URLs, roll back failed saves and r
   assert.equal(client.objects.size,2);assert.deepEqual(await fs.readdir(dir),[]);
   assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM property_images')).rows[0].n,1);
   client.failPut=true;failDb=false;assert.equal((await post(propertyRoute)).status,503);assert.equal(client.objects.size,2);
+  client.failPut=false;
+  const source=await fs.readFile(path.join(__dirname,'../server/server.js'),'utf8');
+  const deletes=source.slice(source.indexOf("app.delete('/api/me/properties/:id/videos/:videoId'"),source.indexOf("app.get('/api/me/inquiries'"));
+  new Function('app','requireAuth','pool','mediaStore',deletes)(app,auth,pool,store);
+  const externalUrl=env.R2_PUBLIC_BASE_URL+'/'+[...client.objects.keys()][0];
+  const external=(await db.query("INSERT INTO property_videos(property_id,url,source_type) VALUES($1,$2,'external') RETURNING id",[property.id,externalUrl])).rows[0];
+  const deletion=await fetch(base+`/api/me/properties/${property.id}/videos/${external.id}`,{method:'DELETE',headers:{'x-owner':'yes'}});
+  assert.equal(deletion.status,200);assert.equal(client.objects.size,2,'deleting a linked video cannot delete someone else’s R2 object');
 });

@@ -1002,7 +1002,7 @@ app.delete('/api/me/properties/:id/videos/:videoId', requireAuth, async (req,res
     const r=await pool.query(`SELECT pv.* FROM property_videos pv JOIN properties p ON p.id=pv.property_id WHERE pv.id=$1 AND pv.property_id=$2 AND p.owner_id=$3`,[req.params.videoId,req.params.id,req.user.id]);
     if(!r.rows[0]) return res.status(404).json({error:'الفيديو غير موجود'});
     await pool.query('DELETE FROM property_videos WHERE id=$1',[req.params.videoId]);
-    await Promise.all([r.rows[0].url,r.rows[0].poster_url].filter(Boolean).map(url=>mediaStore.remove(url).catch(()=>console.warn('Media deletion cleanup deferred'))));
+    if(r.rows[0].source_type==='upload') await Promise.all([r.rows[0].url,r.rows[0].poster_url].filter(Boolean).map(url=>mediaStore.remove(url).catch(()=>console.warn('Media deletion cleanup deferred'))));
     res.json({ok:true});
   }catch(e){res.status(500).json({error:'تعذر حذف الفيديو'});}
 });
