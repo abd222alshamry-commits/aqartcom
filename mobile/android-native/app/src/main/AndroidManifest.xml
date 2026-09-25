@@ -6,10 +6,11 @@
         android:name=".AqartkomApplication"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
-        android:label="عقارتكم"
+        android:label="عقارتكم الجديد"
         android:supportsRtl="true"
         android:theme="@style/Theme.Aqartkom"
         android:usesCleartextTraffic="false">
+        <activity android:name=".SiteActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

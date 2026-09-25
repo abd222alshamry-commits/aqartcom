@@ -16,6 +16,7 @@ import com.aqartkom.nativeapp.ui.AqartkomTheme
 
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<AppViewModel>()
+    override fun onResume() { super.onResume(); viewModel.refreshSession() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
