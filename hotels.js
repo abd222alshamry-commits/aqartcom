@@ -15,10 +15,10 @@ async function search(){
   if(!checkIn||!checkOut||nights(checkIn,checkOut)<=0)throw Error('اختر تاريخ مغادرة بعد تاريخ الوصول.');
   const city=$('city').value,params=new URLSearchParams({lodging_type:$('lodgingType')?.value||'',q:$('q').value,city:city==='mashta'?'':city,checkIn,checkOut,adults:$('guests').value,rooms:$('rooms').value});
   if(city==='mashta')params.set('region','mashta');if($('includeDemo').checked)params.set('includeDemo','true');
-  const r=await fetch('/api/hotels?'+params);const j=await r.json();if(version!==hotelSearchVersion)return;if(!r.ok)throw Error(j.error||'تعذر تحميل الإقامات.');
+  const r=await fetch('/api/hotels?'+params);const j=await r.json().catch(()=>({error:'تعذر تحميل الإقامات. أعد المحاولة بعد قليل.'}));if(version!==hotelSearchVersion)return;if(!r.ok||!Array.isArray(j.data))throw Error(j.error||'تعذر تحميل الإقامات.');
   selectedSearch={checkIn,checkOut,adults:Number($('guests').value),rooms:Number($('rooms').value)};
   render((j.data||[]).filter(h=>$('includeDemo').checked||!isDemoHotel(h)));status.textContent='';
- }catch(error){if(version!==hotelSearchVersion)return;$('count').textContent='';$('hotels').replaceChildren();status.textContent=error.message||'تعذر الاتصال. أعد البحث للمحاولة مجددًا.';}
+ }catch(error){if(version!==hotelSearchVersion)return;$('count').textContent='';$('hotels').replaceChildren();status.textContent=error instanceof TypeError?'تعذر الاتصال. تحقق من الإنترنت وأعد البحث.':error.message||'تعذر الاتصال. أعد البحث للمحاولة مجددًا.';}
  finally{if(version===hotelSearchVersion)$('hotels').setAttribute('aria-busy','false');}
 }
 function isDemoHotel(h){return String(h?.slug||'').startsWith('aqartkom-demo-hotel-v1-')&&String(h?.name||'').startsWith('تجريبي —');}

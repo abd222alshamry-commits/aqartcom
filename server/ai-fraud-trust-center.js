@@ -36,5 +36,10 @@ module.exports=function installFraudTrustCenter(app,{pool,requireAdmin}){
  app.post('/api/admin/trust/scan',requireAdmin,async(_q,res)=>{try{res.json(await scan())}catch(e){res.status(500).json({error:e.message})}});
  app.get('/api/admin/trust',requireAdmin,async(req,res)=>{try{await ensure();const risk=String(req.query.risk||'');const vals=[];let where=`WHERE a.entity_type='property'`;if(risk){vals.push(risk);where+=` AND a.risk_level=$${vals.length}`};const rows=(await pool.query(`SELECT a.*,p.title,p.city,p.district,p.price,p.mode,p.status property_status FROM ai_trust_assessments a JOIN properties p ON p.id=a.entity_id ${where} ORDER BY CASE a.risk_level WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,a.trust_score ASC LIMIT 300`,vals)).rows;const summary=(await pool.query(`SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE risk_level='critical')::int critical,COUNT(*) FILTER(WHERE risk_level='high')::int high,ROUND(AVG(trust_score),1) avg_score FROM ai_trust_assessments WHERE entity_type='property'`)).rows[0];res.json({summary,items:rows,safety:{auto_reject:false,auto_suspend:false,review_required:true}})}catch(e){res.status(500).json({error:e.message})}});
  app.patch('/api/admin/trust/:id/status',requireAdmin,async(req,res)=>{try{await ensure();const status=['open','reviewed','cleared'].includes(req.body.status)?req.body.status:null;if(!status)return res.status(400).json({error:'invalid status'});const row=(await pool.query(`UPDATE ai_trust_assessments SET status=$1 WHERE id=$2 RETURNING *`,[status,req.params.id])).rows[0];res.json(row||{})}catch(e){res.status(500).json({error:e.message})}});
- ensure().then(()=>scan()).catch(console.error);return{scan};
+ // Concurrent startup DDL can abort this idempotent scan with a PostgreSQL deadlock.
+ // Retry the full scan only for that transient condition; keep every check enabled.
+ const startup=(async()=>{for(let attempt=0;attempt<3;attempt++){
+  try{return await scan();}catch(error){if(error.code!=='40P01'||attempt===2)throw error;await new Promise(resolve=>setTimeout(resolve,300*(attempt+1)));}
+ }})().catch(console.error);
+ return{scan,startup};
 };

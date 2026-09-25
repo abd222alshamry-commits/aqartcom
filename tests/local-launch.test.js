@@ -36,6 +36,7 @@ test('hotel search supports chalet and town links, visible failure messages, dem
  w.fetch=async()=>({ok:true,json:async()=>({data:[{...real,name:'نتيجة أحدث'}]})});await w.search();
  resolve({ok:true,json:async()=>({data:[real]})});await first;assert.match(w.document.getElementById('hotels').textContent,/نتيجة أحدث/);
  w.fetch=async()=>({ok:false,json:async()=>({error:'تعذر تحميل الإقامات'})});await w.search();assert.match(w.document.getElementById('hotelSearchStatus').textContent,/تعذر/);assert.equal(w.document.querySelectorAll('#hotels .card').length,0);
+ w.fetch=async()=>({ok:false,json:async()=>{throw new SyntaxError('Unexpected token <');}});await w.search();assert.match(w.document.getElementById('hotelSearchStatus').textContent,/أعد المحاولة/);assert.doesNotMatch(w.document.body.textContent,/Unexpected token/);
  w.document.getElementById('checkOut').value=w.document.getElementById('checkIn').value;await w.search();assert.match(w.document.getElementById('hotelSearchStatus').textContent,/تاريخ مغادرة/);
 });
 test('existing lodging constraint upgrades idempotently and preserves records',async t=>{
