@@ -7,6 +7,7 @@ services:
     branch: v93-render
     region: frankfurt
     plan: 0.5c-512mb
+    numInstances: 1
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     disk:
@@ -14,6 +15,10 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
+      # Optional R2 credentials are entered in the existing service's Environment.
+      # See infra/r2.env.example and docs/economy-r2-plan.md. Default provider stays local.
+      - key: MEDIA_STORAGE_TARGET_GB
+        value: "1000"
       - key: NODE_ENV
         value: production
       - key: PORT

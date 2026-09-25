@@ -35,7 +35,8 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 const uploadDir = path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
-app.use('/uploads', express.static(uploadDir));
+const mediaStore = require('./media-storage').createMediaStorage({uploadDir});
+app.use('/uploads', express.static(uploadDir), mediaStore.redirectMissing);
 const storage = multer.diskStorage({ destination: (_req,_file,cb)=>cb(null, uploadDir), filename: (_req,file,cb)=>{ const ext=path.extname(file.originalname).toLowerCase(); cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`); } });
 const imageUpload = multer({ storage, limits: { files: 12, fileSize: 8*1024*1024 }, fileFilter: (_req,file,cb)=>cb(null, /^image\/(jpeg|png|webp|jpg)$/.test(file.mimetype)) });
 const videoUpload = multer({ storage, limits: { files: 3, fileSize: 100*1024*1024 }, fileFilter: (_req,file,cb)=>cb(null, /^video\/(mp4|webm|quicktime)$/.test(file.mimetype)) });
@@ -319,7 +320,7 @@ require('./admin-permissions').register(app,{pool,requireAdmin,bcrypt,ownerEmail
 require('./offer-review').register(app,{pool,requireAdmin});
 require('./sol-catalog').register(app,{pool});
 require('./listing-management').register(app,{pool,requireAuth,getCurrentUser});
-require('./hotel-media').register(app,{pool,requireOfficeMember,ownedHotel,uploadDir,createVideoPoster});
+require('./hotel-media').register(app,{pool,requireOfficeMember,ownedHotel,uploadDir,createVideoPoster,mediaStore});
 require('./host-portal').register(app,{pool,requireAuth,requireOfficeMember,ownedHotel});
 
 app.get('/api/office/hotels',requireOfficeMember,async(req,res)=>{try{const hs=(await pool.query(`SELECT h.*,(SELECT COUNT(*) FROM hotel_rooms r WHERE r.hotel_id=h.id)::int room_types,(SELECT COUNT(*) FROM hotel_bookings b WHERE b.hotel_id=h.id AND b.status IN ('pending','confirmed'))::int open_bookings FROM hotels h WHERE (h.office_id=$1 OR h.owner_id=$2 OR $3::boolean) ORDER BY h.created_at DESC`,[req.office.id,req.office.owner_id,req.office.platform_admin===true])).rows;res.json({data:hs});}catch(e){res.status(500).json({error:'تعذر تحميل فنادق المكتب'});}});
@@ -962,25 +963,7 @@ app.delete('/api/me/properties/:id', requireAuth, async (req,res)=>{
   try { const id=Number(req.params.id); const r=await pool.query('DELETE FROM properties WHERE id=$1 AND owner_id=$2 RETURNING id',[id,req.user.id]); if(!r.rows[0]) return res.status(404).json({error:'العقار غير موجود أو لا تملك صلاحية حذفه'}); res.json({ok:true}); } catch(e){res.status(500).json({error:'تعذر حذف العقار'});} 
 });
 
-app.post('/api/me/properties/:id/images', requireAuth, receiveImages, async (req,res)=>{
-  try { const id=Number(req.params.id); const own=await pool.query('SELECT id FROM properties WHERE id=$1 AND owner_id=$2',[id,req.user.id]); if(!own.rows[0]) return res.status(404).json({error:'العقار غير موجود أو لا تملك صلاحية تعديله'}); const count=await pool.query('SELECT COALESCE(MAX(sort_order),-1) AS max FROM property_images WHERE property_id=$1',[id]); let order=Number(count.rows[0].max)+1; const rows=[]; for(const f of req.files||[]){const url=`/uploads/${f.filename}`; const r=await pool.query('INSERT INTO property_images(property_id,url,sort_order) VALUES($1,$2,$3) RETURNING *',[id,url,order++]); rows.push(r.rows[0]);} res.status(201).json({data:rows}); } catch(e){console.error(e);res.status(500).json({error:'تعذر رفع الصور'});} 
-});
-
-app.post('/api/me/properties/:id/videos', requireAuth, receiveVideos, async (req,res)=>{
-  try {
-    const id=Number(req.params.id);
-    const own=await pool.query('SELECT id FROM properties WHERE id=$1 AND owner_id=$2',[id,req.user.id]);
-    if(!own.rows[0]) return res.status(404).json({error:'العقار غير موجود أو لا تملك صلاحية تعديله'});
-    const rows=[];
-    for(const f of req.files||[]){
-      const url=`/uploads/${f.filename}`;
-      const posterUrl=await createVideoPoster(f.path);
-      const count=await pool.query('SELECT COUNT(*)::int AS n FROM property_videos WHERE property_id=$1',[id]); const isPrimary=count.rows[0].n===0; const r=await pool.query('INSERT INTO property_videos(property_id,url,poster_url,title,is_primary) VALUES($1,$2,$3,$4,$5) RETURNING *',[id,url,posterUrl,f.originalname||'فيديو العقار',isPrimary]);
-      rows.push(r.rows[0]);
-    }
-    res.status(201).json({data:rows});
-  } catch(e){console.error(e);res.status(500).json({error:'تعذر رفع الفيديو'});}
-});
+require('./property-uploads').register(app,{pool,requireAuth,receiveImages,receiveVideos,createVideoPoster,uploadDir,mediaStore});
 
 app.post('/api/me/properties/:id/external-videos', requireAuth, async (req,res)=>{
   try {
@@ -1018,15 +1001,14 @@ app.delete('/api/me/properties/:id/videos/:videoId', requireAuth, async (req,res
   try {
     const r=await pool.query(`SELECT pv.* FROM property_videos pv JOIN properties p ON p.id=pv.property_id WHERE pv.id=$1 AND pv.property_id=$2 AND p.owner_id=$3`,[req.params.videoId,req.params.id,req.user.id]);
     if(!r.rows[0]) return res.status(404).json({error:'الفيديو غير موجود'});
-    const file=path.join(uploadDir,path.basename(r.rows[0].url));
     await pool.query('DELETE FROM property_videos WHERE id=$1',[req.params.videoId]);
-    try{fs.unlinkSync(file)}catch{}
+    await Promise.all([r.rows[0].url,r.rows[0].poster_url].filter(Boolean).map(url=>mediaStore.remove(url).catch(()=>console.warn('Media deletion cleanup deferred'))));
     res.json({ok:true});
   }catch(e){res.status(500).json({error:'تعذر حذف الفيديو'});}
 });
 
 app.delete('/api/me/properties/:id/images/:imageId', requireAuth, async (req,res)=>{
-  try { const r=await pool.query(`SELECT pi.* FROM property_images pi JOIN properties p ON p.id=pi.property_id WHERE pi.id=$1 AND pi.property_id=$2 AND p.owner_id=$3`,[req.params.imageId,req.params.id,req.user.id]); if(!r.rows[0]) return res.status(404).json({error:'الصورة غير موجودة'}); const file=path.join(uploadDir,path.basename(r.rows[0].url)); await pool.query('DELETE FROM property_images WHERE id=$1',[req.params.imageId]); try{fs.unlinkSync(file)}catch{} res.json({ok:true}); }catch(e){res.status(500).json({error:'تعذر حذف الصورة'});} 
+  try { const r=await pool.query(`SELECT pi.* FROM property_images pi JOIN properties p ON p.id=pi.property_id WHERE pi.id=$1 AND pi.property_id=$2 AND p.owner_id=$3`,[req.params.imageId,req.params.id,req.user.id]); if(!r.rows[0]) return res.status(404).json({error:'الصورة غير موجودة'}); await pool.query('DELETE FROM property_images WHERE id=$1',[req.params.imageId]); await mediaStore.remove(r.rows[0].url).catch(()=>console.warn('Media deletion cleanup deferred')); res.json({ok:true}); }catch(e){res.status(500).json({error:'تعذر حذف الصورة'});}
 });
 
 app.get('/api/me/inquiries', requireAuth, async (req,res)=>{ const r=await pool.query(`SELECT i.*,p.title FROM inquiries i JOIN properties p ON p.id=i.property_id WHERE p.owner_id=$1 ORDER BY i.created_at DESC`,[req.user.id]); res.json({data:r.rows}); });
@@ -1338,7 +1320,7 @@ app.get('/api/admin/inquiries', requireAdmin, async (_req,res)=>{ const r=await 
 
 
 require('./marei-listings').registerMareiListings(app,pool);
-require('./office-videos')(app,{pool,requireAdmin,uploadDir});
+require('./office-videos')(app,{pool,requireAdmin,uploadDir,mediaStore});
 
 // ===== مراقبة السوق العقاري السوري / Meta =====
 function marketToken(){ return process.env.META_MARKET_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''; }
