@@ -18,7 +18,7 @@ function harness(t) {
     if(String(url).startsWith('/api/stays/search?'))return {ok:true,json:async()=>({data:[hotel]})};
     return {ok:true,json:async()=>({hotel,data:[{...room,available:false}]})};
   };
-  for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])run(dom,file);
+  for(const file of ['listing-cover.js','media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])run(dom,file);
   return {dom,w,calls,videos};
 }
 const settle = async()=>{for(let i=0;i<4;i++)await new Promise(r=>setImmediate(r));};
@@ -31,6 +31,7 @@ test('saved arrays, JSON arrays, object URLs and signed video links are preserve
 test('hotel details collect hotel and room media and images open without losing the hotel',async t=>{
   const {w}=harness(t); await w.openHotel(7);
   const host=w.document.getElementById('hotelMedia');assert.equal(host.querySelectorAll('.media-gallery-item').length,5);
+  assert.deepEqual([...host.querySelectorAll('.media-gallery-item')].map(b=>b.getAttribute('aria-label').startsWith('تشغيل الفيديو')), [true,true,false,false,false]);
   host.querySelector('[data-filter=image]').click();assert.equal(host.querySelectorAll('.media-gallery-item').length,3);
   const launch=host.querySelector('.media-gallery-item');launch.focus();launch.click();
   const viewer=w.document.querySelector('.media-image-viewer');assert.ok(viewer);assert.equal(viewer.querySelector('.media-image-tools span').textContent,'1 / 3');
@@ -63,7 +64,7 @@ test('property gallery exposes every saved image instead of truncating to five',
   const dom=new JSDOM('<main id="app"></main><div id="toast"></div>',{url:'https://aqartcom-v93.onrender.com/property.html?id=1',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window;
   w.PropertyVideo={preview:()=>''};w.advertiserContactLinks=()=>null;w.installAdvertiserContact=()=>{};
   const property={id:1,title:'عقار تجريبي',is_demo:true,images:Array.from({length:12},(_,i)=>({url:'/uploads/photo-'+i+'.jpg'})),videos:[]};
-  w.fetch=async()=>({ok:true,json:async()=>({data:property})});run(dom,'media-gallery.js');run(dom,'property.js');await settle();
+  w.fetch=async()=>({ok:true,json:async()=>({data:property})});run(dom,'listing-cover.js');run(dom,'media-gallery.js');run(dom,'property.js');await settle();
   assert.equal(w.document.querySelectorAll('#propertyMedia .media-gallery-item').length,12);
 });
 test('host media manager keeps saved asset and absolute URLs visible',async t=>{
@@ -75,6 +76,14 @@ test('host media manager keeps saved asset and absolute URLs visible',async t=>{
 test('office property details expose all recorded image URLs',async t=>{
   const dom=new JSDOM(fs.readFileSync(path.join(root,'office-property.html'),'utf8'),{url:'https://aqartcom-v93.onrender.com/office-property.html?id=18',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window;
   w.fetch=async()=>({ok:true,json:async()=>({data:{id:18,title:'صور مكتب',media:[{type:'image',url:'https://images.example/a.jpg'},{url:'/assets/fb-house.jpg'},{type:'video',url:'https://media.example/v.mp4'}]}})});
-  run(dom,'media-gallery.js');run(dom,'office-card.js');run(dom,'office-property.js');await settle();
+  run(dom,'media-gallery.js');run(dom,'listing-cover.js');run(dom,'office-card.js');run(dom,'office-property.js');await settle();
   assert.equal(w.document.querySelectorAll('#officePropertyMedia .media-gallery-item').length,2);
+});
+test('property details put the playable video before real photos and never fabricate a gallery',async t=>{
+ const dom=new JSDOM('<main id="app"></main><div id="toast"></div>',{url:'https://aqartcom-v93.onrender.com/property.html?id=1',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window;
+ w.PropertyVideo={preview:v=>'<button class="real-video">'+v.title+'</button>'};w.advertiserContactLinks=()=>null;w.installAdvertiserContact=()=>{};
+ const property={id:1,title:'عرض فيديو',images:[],videos:[{url:'/uploads/real.mp4',title:'الفيديو الحقيقي',poster_url:'/uploads/real.jpg'}]};
+ w.fetch=async()=>({ok:true,json:async()=>({data:property})});for(const file of ['listing-cover.js','media-gallery.js','property.js'])run(dom,file);await settle();
+ const video=w.document.querySelector('.video-panel'),photos=w.document.querySelector('#propertyMedia');assert.ok(video.compareDocumentPosition(photos)&w.Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.equal(photos.querySelectorAll('img').length,0);assert.doesNotMatch(w.document.getElementById('app').innerHTML,/assets\/property-/);
 });

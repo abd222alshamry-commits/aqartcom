@@ -4,7 +4,7 @@ const policy=require('./stay-policy');
 const TYPES=['hotel','chalet','farm','furnished_apartment'];
 const error=(status,message)=>Object.assign(new Error(message),{status});
 const send=(res,e)=>{if(!e.status)console.error('Stay experience:',e.message);res.status(e.status||500).json({error:e.status?e.message:'تعذر إكمال الطلب الآن. أعد المحاولة.'});};
-const publicHotel=h=>Object.fromEntries(['id','name','slug','city','district','address','description','lodging_type','star_rating','amenities','images','videos','check_in_time','check_out_time','free_cancel_hours','cancellation_policy','rental_terms','review_score','review_count','latitude','longitude'].map(k=>[k,h[k]]));
+const publicHotel=h=>Object.fromEntries(['id','name','slug','city','district','address','description','lodging_type','star_rating','amenities','images','videos','cover_media','check_in_time','check_out_time','free_cancel_hours','cancellation_policy','rental_terms','review_score','review_count','latitude','longitude'].map(k=>[k,h[k]]));
 async function batches(rows,fn){const out=[];for(let i=0;i<rows.length;i+=5)out.push(...await Promise.all(rows.slice(i,i+5).map(fn)));return out;}
 const selection=(q,stay)=>stay({hotel_id:1,room_id:1,check_in:q.checkIn||q.check_in,check_out:q.checkOut||q.check_out,adults:q.adults||2,children:q.children||0,rooms_count:q.rooms||q.rooms_count||1});
 function searchHandler(pool,stay){return async(req,res)=>{try{

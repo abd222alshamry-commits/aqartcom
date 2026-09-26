@@ -20,12 +20,10 @@ window.officeListingCard=function(p){
   const original=source(p.external_url),url=original?.url,sold=p.availability==='sold',tel=phone(p.phone),wa=phone(p.whatsapp);
   const platformKey=original?.platform||p.platform;
   const platform=Object.hasOwn(platforms,platformKey)?platforms[platformKey]:'المصدر';
-  const hosted=/^\/uploads\/office-[a-f0-9]{32}\.mp4$/.test(p.hosted_video?.url||'')?p.hosted_video:null;
-  const poster=hosted&&/^\/uploads\/office-[a-f0-9]{32}\.jpg$/.test(hosted.poster||'')?hosted.poster:null;
-  const thumb=(Array.isArray(p.media)?p.media:[]).find(m=>/^\/assets\/fb-[a-z0-9-]+\.jpg$/.test(m.url||''));
-  const manualImage=p.platform==='manual_office'?(Array.isArray(p.media)?p.media:[]).find(m=>{try{const u=new URL(m.url);return m.type==='image'&&u.protocol==='https:'&&!u.username&&!u.password;}catch{return false;}}):null;
-  const image=poster||thumb?.url||manualImage?.url;
-  const hasVideo=Boolean(hosted||p.media_kind==='video'||(!p.media_kind&&p.video_duration));
+  const hosted=p.hosted_video&&ListingCover.safeUrl(p.hosted_video.url)?p.hosted_video:null;
+  const image=ListingCover.url(p);
+  const savedVideo=ListingCover.candidates(p).find(m=>m.type==='video');
+  const hasVideo=Boolean(hosted||savedVideo||p.media_kind==='video'||(!p.media_kind&&p.video_duration));
   const seconds=Number(hosted?.duration);
   const duration=hosted&&Number.isFinite(seconds)&&seconds>0?Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0'):p.video_duration||('فيديو على '+platform);
   const id=String(p.market_id||p.id||'');
@@ -33,10 +31,10 @@ window.officeListingCard=function(p){
   const location=[p.district,p.city].filter(Boolean).join(' · ')||'الموقع غير مذكور في المصدر';
   const published=dateLabel(p.source_published_at),observed=dateLabel(p.observed_at);
   const dates=[published?'تاريخ المنشور: '+published:p.published_label||'تاريخ المنشور غير متاح',observed?'رصد الإعلان: '+observed:''].filter(Boolean).join(' · ');
-  const mediaContents=`${image?`<img src="${esc(image)}" alt="${esc(thumb?.alt||p.title)}" loading="lazy" referrerpolicy="no-referrer" width="640" height="360">`:''}
+  const mediaContents=`${image?`<img src="${esc(image)}" alt="${esc(p.title)}" loading="lazy" referrerpolicy="no-referrer" width="640" height="360">`:''}
     ${hasVideo?`<span class="marei-play" aria-hidden="true">▶</span><span class="marei-duration">${esc(duration)}</span>`:''}
     ${sold?'<strong class="marei-sold-badge">تم البيع</strong>':''}`;
-  const preview=hasVideo&&(hosted||url)?`<button type="button" class="marei-preview" data-property-video="${esc(JSON.stringify({url:hosted?.url||url,title:p.title}))}" aria-label="${esc('شاهد فيديو '+p.title)}">${mediaContents}</button>`:image?`<div class="marei-preview">${mediaContents}</div>`:'';
+  const preview=hasVideo&&(hosted||savedVideo||url)?`<button type="button" class="marei-preview" data-property-video="${esc(JSON.stringify({url:hosted?.url||savedVideo?.url||url,title:p.title}))}" aria-label="${esc('شاهد فيديو '+p.title)}">${mediaContents}</button>`:image?`<div class="marei-preview">${mediaContents}</div>`:'';
   return `<article class="marei-card${sold?' marei-sold':''}">
     ${preview}<div class="marei-card-body">
     <div class="marei-card-top"><span>${esc(p.advertiser_name||'المعلن')}</span><span class="marei-platform">${esc(platform)}${p.offer_number?' · عرض '+esc(p.offer_number):''}</span></div>

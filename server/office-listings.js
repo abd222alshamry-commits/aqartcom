@@ -64,7 +64,7 @@ async function seedOfficeListings(pool, enabled = process.env.MAREI_LISTINGS_BAT
 }
 
 const publicColumns = `m.id,m.platform,m.title,m.description,m.external_url,m.advertiser_name,
-  m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.rooms,m.media,
+  m.phone,m.whatsapp,m.city,m.district,m.property_type,m.listing_mode,m.price,m.currency,m.area,m.rooms,m.media,m.cover_media,
   m.raw_data->>'office_key' AS office_key,m.raw_data->>'offer_number' AS offer_number,
   m.raw_data->>'source_published_at' AS source_published_at,m.raw_data->>'published_label' AS published_label,
   m.raw_data->>'observed_at' AS observed_at,m.raw_data->>'availability' AS availability,

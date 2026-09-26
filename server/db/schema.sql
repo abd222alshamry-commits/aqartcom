@@ -1328,3 +1328,17 @@ END $$;
 
 -- Preserve the confirmed nightly prices even if the host changes future rates.
 ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS price_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- A real image or a selected video frame, independent of playback priority.
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS cover_media JSONB;
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS cover_media JSONB;
+ALTER TABLE market_listings ADD COLUMN IF NOT EXISTS cover_media JSONB;
+CREATE OR REPLACE FUNCTION clear_deleted_property_cover() RETURNS trigger AS $$
+BEGIN
+ UPDATE properties SET cover_media=NULL,updated_at=NOW() WHERE id=OLD.property_id AND cover_media->>'source_url'=OLD.url;
+ RETURN OLD;
+END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS property_image_cover_cleanup ON property_images;
+CREATE TRIGGER property_image_cover_cleanup AFTER DELETE ON property_images FOR EACH ROW EXECUTE FUNCTION clear_deleted_property_cover();
+DROP TRIGGER IF EXISTS property_video_cover_cleanup ON property_videos;
+CREATE TRIGGER property_video_cover_cleanup AFTER DELETE ON property_videos FOR EACH ROW EXECUTE FUNCTION clear_deleted_property_cover();

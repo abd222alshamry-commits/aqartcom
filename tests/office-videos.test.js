@@ -103,7 +103,7 @@ test('admin upload persists playable video and poster, rejects bad replacements 
   assert.equal((await fs.readdir(uploads)).length,2);
   assert.deepEqual(await fs.readdir(path.join(temp,'private_uploads/office-video-tmp')),[]);
   const vm = require('node:vm'), window = {};
-  vm.runInNewContext(await fs.readFile(path.join(__dirname,'../office-card.js'),'utf8'),{window,URL});
+  vm.runInNewContext(await fs.readFile(path.join(__dirname,'../office-card.js'),'utf8'),{window,URL,ListingCover:require('../listing-cover')});
   const html = window.officeListingCard({...before,hosted_video:updated});
   // The card opens the in-page player, retaining the replaced media URL.
   const playData=html.match(/data-property-video="([^"]+)"/);

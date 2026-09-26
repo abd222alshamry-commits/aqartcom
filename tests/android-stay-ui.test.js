@@ -18,7 +18,7 @@ function setup(t,{ua='AqartkomNative/170',url='https://example.test/hotels.html'
   else throw Error('Unexpected request: '+url);
   return {ok:true,json:async()=>data};
  };
- for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),browser.getInternalVMContext());
+ for(const file of ['listing-cover.js','media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),browser.getInternalVMContext());
  return {w,run:s=>vm.runInContext(s,browser.getInternalVMContext())};
 }
 async function review(w){
@@ -51,5 +51,5 @@ test('Android back returns to guest details and closes cancellation without canc
 test('legacy receipt fragment opens updated details without putting the code in query parameters',async t=>{
  const lookups=[];const {w}=setup(t,{url:'https://example.test/hotels.html#booking='+receipt.booking_code,onLookup:url=>lookups.push(url)});await tick();
  assert.deepEqual(lookups,['/api/stays/booking/'+receipt.booking_code]);assert.match(w.document.querySelector('.receipt-header').textContent,/AQH-123456789012345678/);assert.ok(!w.location.search.includes('AQH-'));
- w.location.hash='#bookings';await tick();assert.ok(w.document.getElementById('lookupBooking'));
+ const hashChanged=new Promise(resolve=>w.addEventListener('hashchange',resolve,{once:true}));w.location.hash='#bookings';await hashChanged;await tick();assert.ok(w.document.getElementById('lookupBooking'));
 });

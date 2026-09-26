@@ -22,6 +22,7 @@ class FakeS3 {
       assert.equal(require('node:crypto').createHash('md5').update(data).digest('base64'),i.ContentMD5);
       this.objects.set(i.Key,{data,metadata:i.Metadata});return {};
     }
+    if(name==='GetObjectCommand'){const object=this.objects.get(i.Key);if(!object)throw Error('missing');return {ContentLength:object.data.length,Body:require('node:stream').Readable.from([object.data.subarray(0,2),object.data.subarray(2)])};}
     if(name==='HeadObjectCommand') {
       const object=this.objects.get(i.Key);if(!object)throw Object.assign(Error('missing'),{name:'NotFound'});
       return {ContentLength:object.data.length+(this.badHead?1:0),Metadata:object.metadata};
@@ -109,4 +110,11 @@ test('property and hotel routes commit remote URLs, roll back failed saves and r
   const external=(await db.query("INSERT INTO property_videos(property_id,url,source_type) VALUES($1,$2,'external') RETURNING id",[property.id,externalUrl])).rows[0];
   const deletion=await fetch(base+`/api/me/properties/${property.id}/videos/${external.id}`,{method:'DELETE',headers:{'x-owner':'yes'}});
   assert.equal(deletion.status,200);assert.equal(client.objects.size,2,'deleting a linked video cannot delete someone else’s R2 object');
+});
+test('frame processing reads only bounded video bytes from the configured bucket and removes its temporary copy',async t=>{
+ const {store,dir,client}=await setup(t);client.objects.set('uploads/tour.mp4',{data:Buffer.from('video-fixture'),metadata:{}});
+ await assert.rejects(store.readForProcessing('https://foreign.example/tour.mp4'),/Unsupported/);
+ await assert.rejects(store.readForProcessing('https://media.example.test/uploads/tour.mp4',2),/large/);
+ const file=await store.readForProcessing('https://media.example.test/uploads/tour.mp4');assert.equal((await fs.readFile(file.path)).toString(),'video-fixture');await file.cleanup();await assert.rejects(fs.stat(file.path),{code:'ENOENT'});
+ assert.ok(!(await fs.readdir(dir)).some(x=>x.startsWith('cover-input-')));
 });

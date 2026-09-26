@@ -1,0 +1,75 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{execFileSync}=require('node:child_process');
+const express=require('express'),{PGlite}=require('@electric-sql/pglite'),{JSDOM}=require('jsdom');
+const cover=require('../listing-cover'),{register}=require('../server/listing-cover'),{createMediaStorage}=require('../server/media-storage');
+const root=path.join(__dirname,'..'),source=n=>fs.readFileSync(path.join(root,n),'utf8');
+test('cards select real chosen covers, uploaded photos, or actual video posters without stock buildings',()=>{
+ const video={url:'/uploads/tour.mp4',poster_url:'/uploads/tour.jpg'};
+ assert.equal(cover.url({primary_video:video}),video.poster_url);
+ assert.equal(cover.url({image_url:'/uploads/photo.jpg',primary_video:video}),'/uploads/photo.jpg');
+ assert.equal(cover.url({cover_media:{url:'/uploads/chosen.jpg'},image_url:'/uploads/photo.jpg',primary_video:video}),'/uploads/chosen.jpg');
+ assert.equal(cover.url({type:'شقة',image_url:'/assets/property-building.webp'}),'');
+ assert.equal(cover.url({videos:JSON.stringify([video])}),video.poster_url);
+ assert.equal(cover.url({hosted_video:{url:'https://media.example/uploads/office.mp4',poster:'https://media.example/uploads/office.jpg'}}),'https://media.example/uploads/office.jpg');
+ assert.equal(cover.url({primary_video:{url:'https://www.youtube.com/watch?v=abcdefghijk'}}),'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg');
+ assert.equal(cover.safeUrl('javascript:alert(1)'),'');assert.equal(cover.safeUrl('https://user:pass@example.test/x.jpg'),'');
+});
+test('cover API authorizes media, extracts selected frame, persists it, checks concurrency and clears deleted sources',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'listing-cover-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const db=new PGlite();await db.waitReady;t.after(()=>db.close());await db.exec(source('server/db/schema.sql'));
+ const owner=(await db.query("INSERT INTO users(name,email,password_hash) VALUES('Owner','cover@test.invalid','unused') RETURNING id")).rows[0].id;
+ const outsider=(await db.query("INSERT INTO users(name,email,password_hash) VALUES('Other','other-cover@test.invalid','unused') RETURNING id")).rows[0].id;
+ const pid=(await db.query("INSERT INTO properties(owner_id,title,type,mode,city,price,status) VALUES($1,'Home','شقة','بيع','دمشق',100,'active') RETURNING id",[owner])).rows[0].id;
+ await db.query("INSERT INTO property_images(property_id,url) VALUES($1,'/uploads/photo.jpg')",[pid]);
+ await db.query("INSERT INTO property_videos(property_id,url,poster_url) VALUES($1,'/uploads/tour.mp4','/uploads/auto.jpg')",[pid]);
+ execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','color=c=red:s=96x64:d=1','-f','lavfi','-i','color=c=blue:s=96x64:d=1','-filter_complex','[0:v][1:v]concat=n=2:v=1:a=0','-c:v','libx264','-pix_fmt','yuv420p','-y',path.join(dir,'tour.mp4')]);
+ const hotel=(await db.query("INSERT INTO hotels(owner_id,name,slug,city) VALUES($1,'Chalet','cover-chalet','دمشق') RETURNING id",[owner])).rows[0].id;
+ await db.query('INSERT INTO hotel_rooms(hotel_id,name,room_type,price,videos) VALUES($1,\'Unit\',\'double\',1,$2::jsonb)',[hotel,JSON.stringify([{url:'/uploads/tour.mp4',poster_url:'/uploads/auto.jpg'}])]);
+ const office=(await db.query("INSERT INTO offices(owner_id,name,slug) VALUES($1,'Office','cover-office') RETURNING id",[owner])).rows[0].id;
+ const market=(await db.query("INSERT INTO market_listings(office_id,platform,external_id,title,media,status) VALUES($1,'manual_office','cover-market','Office home',$2::jsonb,'published') RETURNING id",[office,JSON.stringify([{type:'image',url:'https://media.example/photo.jpg'}])])).rows[0].id;
+ const pool={query:(...x)=>db.query(...x),connect:async()=>({query:(...x)=>db.query(...x),release(){}})};
+ const store=createMediaStorage({uploadDir:dir,env:{}});const app=express();app.use(express.json());
+ const auth=(req,res,next)=>{if(!req.headers['x-owner'])return res.sendStatus(401);req.user={id:req.headers['x-owner']==='yes'?owner:outsider,role:'user'};next();};
+ register(app,{pool,requireAuth:auth,mediaStore:store,uploadDir:dir});const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));const base='http://127.0.0.1:'+server.address().port;
+ const endpoint=(kind='property',id=pid)=>'/api/listing-management/'+kind+'/'+id+'/cover';
+ async function call(url,body,user='yes'){const r=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(user?{'x-owner':user}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:r.status===401?null:await r.json()};}
+ const first=(await call(endpoint())).data;assert.equal(first.media.length,2);assert.equal(first.media[1].can_extract,true);
+ assert.equal((await call(endpoint(),undefined,'')).status,401);assert.equal((await call(endpoint(),undefined,'other')).status,404);
+ const select=async(type,url,extras={},ep=endpoint())=>call(ep,{revision:(await call(ep)).data.revision,type,url,...extras});
+ assert.equal((await select('image','/uploads/foreign.jpg')).status,400);
+ assert.equal((await select('video','http://169.254.169.254/private.mp4',{seconds:1})).status,400);
+ assert.equal((await select('video','/uploads/tour.mp4',{seconds:-1})).status,400);
+ assert.equal((await select('video','/uploads/tour.mp4',{seconds:'1;invalid'})).status,400);
+ assert.equal((await select('image','/uploads/photo.jpg')).status,200);
+ assert.equal((await call(endpoint(),{revision:first.revision,type:'video',url:'/uploads/tour.mp4'})).status,409);
+ const picked=await select('video','/uploads/tour.mp4',{seconds:1.3});assert.equal(picked.status,200,JSON.stringify(picked));assert.equal(picked.data.cover.seconds,1.3);
+ const file=path.join(dir,path.basename(picked.data.cover.url));assert.ok(fs.statSync(file).size>0);
+ // The second half of the fixture is blue; a hardcoded first-frame thumbnail would be red.
+ const pixel=execFileSync('ffmpeg',['-v','error','-i',file,'-vf','scale=1:1','-f','rawvideo','-pix_fmt','rgb24','pipe:1']);assert.ok(pixel[2]>180&&pixel[0]<70,Array.from(pixel).join(','));
+ assert.equal((await call(endpoint())).data.cover.url,picked.data.cover.url);
+ assert.equal((await select('video','/uploads/tour.mp4',{seconds:8})).status,400);assert.equal((await call(endpoint())).data.cover.url,picked.data.cover.url);
+ await db.query('DELETE FROM property_videos WHERE property_id=$1',[pid]);assert.equal((await call(endpoint())).data.cover,null);
+ const hc=await call(endpoint('hotel',hotel));assert.equal(hc.data.media[0].type,'video');assert.equal((await select('video','/uploads/tour.mp4',{},endpoint('hotel',hotel))).data.cover.url,'/uploads/auto.jpg');
+ assert.equal((await select('image','https://media.example/photo.jpg',{},endpoint('market',market))).data.status,'pending');
+ assert.ok((await db.query("SELECT * FROM offer_review_events WHERE reason='تحديد صورة العرض'")).rows.length>=4);
+ await db.exec(source('server/db/schema.sql'));assert.equal((await call(endpoint('market',market))).data.cover.url,'https://media.example/photo.jpg');
+});
+test('cover editor uses the selected video time and updates its visible preview after save',async t=>{
+ const dom=new JSDOM('<body><section id="editor"></section></body>',{url:'https://example.test',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window,calls=[];
+ w.HTMLMediaElement.prototype.pause=function(){};
+ w.fetch=async(url,opt={})=>{calls.push({url,opt});return {ok:true,json:async()=>opt.method?{ok:true,cover:{url:'/uploads/frame.jpg'},message:'تم حفظ صورة العرض.'}:{revision:'a'.repeat(64),media:[{type:'video',url:'/uploads/tour.mp4',can_extract:true}]}};};
+ w.eval(source('listing-cover.js'));await w.ListingCover.editor(w.document.getElementById('editor'),'property',7);
+ const input=w.document.querySelector('input');input.value='2.3';[...w.document.querySelectorAll('button')].find(x=>x.textContent==='اعتماد هذه اللقطة').click();
+ for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r));
+ const body=JSON.parse(calls.find(c=>c.opt.method==='POST').opt.body);assert.equal(body.seconds,2.3);assert.equal(body.url,'/uploads/tour.mp4');assert.equal(w.document.querySelector('.cover-current img').getAttribute('src'),'/uploads/frame.jpg');
+});
+test('new property attachment picker saves the chosen video position after upload and retries cover without uploading twice',async t=>{
+ const dom=new JSDOM('<body><section id="media"></section></body>',{url:'https://example.test',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window,requests=[];let fail=true,uploads=0;
+ w.URL.createObjectURL=()=> 'blob:test-video';w.URL.revokeObjectURL=()=>{};w.HTMLMediaElement.prototype.pause=function(){};
+ w.XMLHttpRequest=class{upload={};open(){}send(){uploads++;this.status=201;this.responseText=JSON.stringify({data:[{url:'/uploads/real.mp4'}]});queueMicrotask(()=>this.onload());}};
+ w.fetch=async(url,opt={})=>{if(opt.method){requests.push(JSON.parse(opt.body));if(fail)return {ok:false,json:async()=>({error:'try again'})};return {ok:true,json:async()=>({ok:true})};}return {ok:true,json:async()=>({revision:'b'.repeat(64)})};};
+ w.eval(source('listing-cover.js'));w.eval(source('property-media.js'));const media=w.PropertyMedia.create(w.document.getElementById('media'));
+ const input=w.document.getElementById('adVideos');Object.defineProperty(input,'files',{value:[new w.File(['video'],'tour.mp4',{type:'video/mp4'})]});input.dispatchEvent(new w.Event('change'));
+ const player=w.document.querySelector('video');Object.defineProperty(player,'videoWidth',{value:640});Object.defineProperty(player,'readyState',{value:2});player.currentTime=1.4;
+ w.document.querySelector('.cover-pick').click();assert.match(w.document.querySelector('.cover-selected').textContent,/1.4/);media.lock();
+ await assert.rejects(media.upload(7),/try again/);assert.equal(uploads,1);fail=false;assert.equal((await media.upload(7)).length,0);assert.equal(uploads,1);assert.equal(requests[1].seconds,1.4);assert.equal(requests[1].url,'/uploads/real.mp4');media.destroy();
+});

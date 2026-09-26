@@ -110,4 +110,4 @@ function register(app,{pool,requireAuth,getCurrentUser}) {
   res.json({ok:true,status:result.status,message:method==='delete'?'تم حذف الإعلان من الموقع':kind==='market'&&req.user.role!=='admin'?'تم حفظ التعديل وإرساله للمراجعة':'تم حفظ تعديل الإعلان'});
  }));
 }
-module.exports={register,validate,adminGrant};
+module.exports={register,validate,adminGrant,scope,config,validId};

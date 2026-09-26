@@ -13,7 +13,7 @@ test('checkout disables unavailable Sham Cash, reviews the transfer and never tr
   assert.equal(url,'/api/mobile/hotels/book');const sent=JSON.parse(options.body);requests.push(sent);
   return {ok:true,json:async()=>({data:{...base,booking_code:'AQH-123456789012345678',status:'pending',payment_method:'shamcash_manual',payment_status:'pending'},manual_payment:{checkout_url:'/hotel-payment.html#AQH-123456789012345678:'+sent.payment_access_token}})};
  };
- for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),browser.getInternalVMContext());
+ for(const file of ['listing-cover.js','media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),browser.getInternalVMContext());
  vm.runInContext("selectedSearch={checkIn:'2099-06-01',checkOut:'2099-06-03',adults:2,children:0,rooms:1};selectedHotel={id:1,name:'Test hotel',slug:'test'};",browser.getInternalVMContext());
  await w.bookingForm(1,2);assert.equal(w.document.querySelector('option[value=shamcash_manual]').disabled,true);
  available=true;await w.bookingForm(1,2);

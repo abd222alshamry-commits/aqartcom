@@ -63,7 +63,7 @@ test('real website journey selects a chalet, reviews, recovers a lost confirmati
   const dom=new JSDOM(source('hotels.html'),{url:origin+'/hotels.html?region=mashta&lodging_type=chalet&checkIn=2099-06-01&checkOut=2099-06-04&children=1',runScripts:'dangerously',pretendToBeVisual:true});t.after(()=>dom.window.close());
   const w=dom.window;w.matchMedia=()=>({matches:true});w.HTMLElement.prototype.scrollIntoView=function(){};w.addEventListener('error',e=>errors.push(e.message));
   w.fetch=async(url,options={})=>{calls.push({url:String(url),body:options.body});const response=await fetch(new URL(url,origin),{...options,signal:undefined});if(String(url)==='/api/mobile/hotels/book'&&loseResponse){loseResponse=false;throw new w.TypeError('Connection lost after commit');}return response;};
-  for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])vm.runInContext(source(file),dom.getInternalVMContext(),{filename:file});return {dom,w};
+  for(const file of ['listing-cover.js','media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])vm.runInContext(source(file),dom.getInternalVMContext(),{filename:file});return {dom,w};
  }
  const pause=()=>new Promise(r=>setTimeout(r,10));async function until(fn){for(let i=0;i<200;i++){if(fn())return;await pause();}throw Error('Timed out waiting for UI');}
  let {w}=browser();await until(()=>w.document.querySelector('.hotel-name'));

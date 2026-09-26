@@ -111,7 +111,7 @@
     active = { close: cleanup }; show(index); close.focus({ preventScroll: true });
   }
   function mount(container, entries, title = 'الصور والفيديوهات') {
-    entries = entries.filter(item => safeUrl(item.url)); container.replaceChildren(); container.classList.add('media-gallery');
+    entries = entries.filter(item => safeUrl(item.url)).sort((a,b)=>Number(b.type==='video')-Number(a.type==='video'));  container.replaceChildren(); container.classList.add('media-gallery');
     const heading = node('h3', '', title), filters = node('div', 'media-gallery-filters'), grid = node('div', 'media-gallery-grid');
     filters.setAttribute('aria-label', 'تصفية الوسائط'); container.append(heading, filters, grid);
     const photos = entries.filter(item => item.type === 'image');
@@ -130,7 +130,7 @@
         grid.append(button);
       });
     }
-    for (const [filter, label, count] of [['all', 'الكل', entries.length], ['image', 'الصور', photos.length], ['video', 'الفيديوهات', entries.length - photos.length]]) {
+    for (const [filter, label, count] of [['all', 'الكل', entries.length], ['video', 'الفيديوهات', entries.length - photos.length], ['image', 'الصور', photos.length]]) {
       const button = node('button', '', `${label} (${count})`); button.dataset.filter = filter; button.onclick = () => render(filter); filters.append(button);
     }
     render('all');

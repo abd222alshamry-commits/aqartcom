@@ -17,7 +17,7 @@
       if (item.uploaded) continue;
       item.error = '';
       try {
-        await send(item, percent => progress(item, percent));
+        item.remote = await send(item, percent => progress(item, percent));
         item.uploaded = true;
       } catch (error) { item.error = error.message || 'تعذر رفع الملف'; }
       progress(item, 100);
@@ -48,7 +48,7 @@
   }
   function create(container) {
     const items = [];
-    let locked = false;
+    let locked = false, selection = null, coverSaved = false;
     container.innerHTML = `<h3>صور وفيديو الإعلان <small>(اختياري)</small></h3>
       <div class="media-pickers">
         <label class="media-picker">📷 إضافة صور<input id="adImages" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple aria-label="إضافة صور للإعلان"></label>
@@ -60,6 +60,7 @@
     const error = container.querySelector('.media-error');
     const previews = container.querySelector('.media-previews');
     function render() {
+      previews.querySelectorAll('video').forEach(video=>video.pause());
       previews.replaceChildren();
       for (const item of items) {
         const figure = document.createElement('figure');
@@ -73,6 +74,12 @@
         state.textContent = item.uploaded ? '✓ تم الرفع' : item.error || 'جاهز للرفع';
         if (item.error) state.className = 'media-error';
         figure.append(media, caption, state);
+        if (selection?.item === item) {figure.classList.add('cover-selected');const badge=document.createElement('small');badge.textContent=item.kind==='videos'?'صورة العرض: لقطة عند '+selection.seconds.toFixed(1)+' ثانية':'الصورة الرئيسية للعرض';figure.append(badge);}
+        if (!locked) {
+          const choose=document.createElement('button');choose.type='button';choose.className='cover-pick';choose.textContent=item.kind==='images'?'تعيين كصورة العرض':'اعتماد اللقطة الحالية للعرض';
+          choose.onclick=()=>{if(item.kind==='videos'&&(!media.videoWidth||media.readyState<2)){error.textContent='انتظر تحميل الفيديو، ثم حرّكه إلى اللقطة المطلوبة.';error.hidden=false;return;}media.pause?.();selection={item,seconds:item.kind==='videos'?media.currentTime:null};coverSaved=false;error.hidden=true;render();};figure.append(choose);
+        }
+        if(item.kind==='videos'&&selection?.item===item)media.onloadedmetadata=()=>{media.currentTime=selection.seconds;};
         if (!locked) {
           const remove = document.createElement('button');
           remove.type = 'button'; remove.textContent = 'إزالة';
@@ -80,6 +87,7 @@
           remove.addEventListener('click', () => {
             if (media.tagName === 'VIDEO') media.pause();
             URL.revokeObjectURL(item.url);
+            if(selection?.item===item){selection=null;coverSaved=false;}
             items.splice(items.indexOf(item), 1);
             render();
           });
@@ -107,7 +115,15 @@
       lock() { locked = true; container.querySelectorAll('input').forEach(input => input.disabled = true); render(); },
       async upload(propertyId, progress) {
         const remaining = await uploadPending(items, (item, update) => sendFile(propertyId, item, update), progress);
-        render(); return remaining;
+        render();
+        if(!remaining.length && selection && !coverSaved){
+          const endpoint='/api/listing-management/property/'+encodeURIComponent(propertyId)+'/cover';
+          const state=await root.ListingCover.request(endpoint);
+          const body={revision:state.revision,type:selection.item.kind==='images'?'image':'video',url:selection.item.remote.url};
+          if(body.type==='video')body.seconds=selection.seconds;
+          await root.ListingCover.request(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});coverSaved=true;
+        }
+        return remaining;
       },
       destroy() { previews.querySelectorAll('video').forEach(video => video.pause()); items.forEach(item => URL.revokeObjectURL(item.url)); }
     };

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {finished} = require('node:stream/promises');
-const {S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand, ListObjectsV2Command} = require('@aws-sdk/client-s3');
+const {S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command} = require('@aws-sdk/client-s3');
 
 const TYPES = {'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp','.mp4':'video/mp4','.mov':'video/quicktime','.webm':'video/webm'};
 function mediaPath(value) {
@@ -107,6 +107,24 @@ function createMediaStorage({uploadDir, env = process.env, client} = {}) {
       }
     };
   }
+  async function readForProcessing(url, maxBytes=100*1024*1024) {
+    const key=keyFromUrl(url);
+    if(!key||!(/\.(mp4|mov|webm)$/i.test(key)))throw Error('Unsupported video source');
+    const local=localPath(key);
+    try {const info=await inspect(local);if(info.size>maxBytes)throw Error('Video too large');return {path:local,cleanup:async()=>{}};}
+    catch(e){if(e.code!=='ENOENT'||provider!=='r2')throw e;}
+    // Read only a validated object from our configured bucket; never fetch arbitrary URLs.
+    const object=await send(new GetObjectCommand({Bucket:bucket,Key:key}));
+    const temporary=path.join(root,'cover-input-'+crypto.randomBytes(16).toString('hex')+path.extname(key));
+    try {
+      if(Number(object.ContentLength)>maxBytes)throw Error('Video too large');
+      let bytes=0;const handle=await fs.promises.open(temporary,'wx',0o600);
+      try {for await(const chunk of object.Body){bytes+=chunk.length;if(bytes>maxBytes)throw Error('Video too large');await handle.writeFile(chunk);}}
+      finally{await handle.close();}
+      if(!bytes)throw Error('Empty video');
+      return {path:temporary,cleanup:()=>fs.promises.unlink(temporary).catch(()=>{})};
+    } catch(e){object.Body?.destroy?.();await fs.promises.unlink(temporary).catch(()=>{});throw e;}
+  }
   async function remove(url) {
     const key = keyFromUrl(url); if (!key) return;
     if (provider === 'r2') await send(new DeleteObjectCommand({Bucket:bucket,Key:key}));
@@ -131,6 +149,6 @@ function createMediaStorage({uploadDir, env = process.env, client} = {}) {
     } while (token);
     return {provider,objects,bytes,target_gb:targetGB,used_percent:bytes/(targetGB*1e9)*100,estimated_storage_usd_month:Math.max(0,bytes/1e9-10)*0.015};
   }
-  return {provider,publicBase,batch,copy,inspect,head,matches,keyFromUrl,localPath,remove,redirectMissing,usage,uploadGate};
+  return {provider,publicBase,batch,copy,inspect,head,matches,readForProcessing,keyFromUrl,localPath,remove,redirectMissing,usage,uploadGate};
 }
 module.exports={createMediaStorage,mediaPath,hashes};

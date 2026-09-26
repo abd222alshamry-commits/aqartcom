@@ -20,12 +20,12 @@ async function publicMediaKeys(pool, origins=[]) {
   const keys=new Set(),allowed=new Set(origins.filter(Boolean).map(v=>new URL(v).origin));
   // Deliberate whitelist. Never scan/copy uploads wholesale: verification and payment documents can live there.
   const queries=[
-    'SELECT image_url AS media FROM properties',
+    'SELECT image_url AS media,cover_media FROM properties',
     'SELECT url AS media FROM property_images',
     'SELECT url AS media,poster_url AS poster FROM property_videos',
-    'SELECT images AS media,videos FROM hotels',
+    'SELECT images AS media,videos,cover_media FROM hotels',
     'SELECT images AS media,videos FROM hotel_rooms',
-    "SELECT raw_data->'local_video' AS media FROM market_listings"
+    "SELECT raw_data->'local_video' AS media,cover_media FROM market_listings"
   ];
   for(const sql of queries) for(const row of (await pool.query(sql)).rows) for(const value of Object.values(row)) collectMedia(value,keys,allowed);
   return [...keys].sort();

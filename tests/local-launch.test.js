@@ -12,7 +12,7 @@ function page(t,name,query=''){
 test('property shortcuts and deep links use the correct governorate and locality, and clear stale map filters',async t=>{
  const w=page(t,'index','?region=mashta'),calls=[];
  w.fetch=async url=>{calls.push(String(url));return {ok:true,json:async()=>({data:[],user:null})};};
- for(const file of ['syria-localities.js','location-picker.js','app.js'])w.runScript(source(file));await settle();
+ for(const file of ['listing-cover.js','syria-localities.js','location-picker.js','app.js'])w.runScript(source(file));await settle();
  let query=new URL(calls.filter(x=>x.startsWith('/api/properties?')).at(-1),'https://qa.invalid').searchParams;
  assert.equal(query.get('city'),'طرطوس');assert.equal(query.get('district'),'مشتى الحلو');
  w.runScript('geoSearch.lat=34;geoSearch.lng=36;geoSearch.polygon=[[34,36],[34,37],[35,36]]');
@@ -28,7 +28,7 @@ test('hotel search supports chalet and town links, visible failure messages, dem
  const w=page(t,'hotels','?region=mashta&lodging_type=chalet'),calls=[];
  const real={id:1,name:'شاليه اختبار محلي',city:'طرطوس',district:'مشتى الحلو',lodging_type:'chalet'},demo={id:2,name:'تجريبي — شاليه',slug:'aqartkom-demo-hotel-v1-chalet'};
  w.fetch=async url=>{calls.push(String(url));return {ok:true,json:async()=>({data:[real,demo]})};};
- for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])w.runScript(source(file));await settle();
+ for(const file of ['listing-cover.js','media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])w.runScript(source(file));await settle();
  const params=new URL(calls[0],'https://qa.invalid').searchParams;assert.equal(params.get('region'),'mashta');assert.equal(params.get('lodging_type'),'chalet');assert.equal(params.get('city'),'');
  assert.equal(w.document.querySelectorAll('#hotels .card').length,1);assert.match(w.document.querySelector('#hotels .meta').textContent,/شاليه/);
  const check=w.document.getElementById('includeDemo');check.click();await settle();assert.equal(w.document.querySelectorAll('#hotels .card').length,2);assert.match(calls.at(-1),/includeDemo=true/);

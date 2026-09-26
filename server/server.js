@@ -49,10 +49,13 @@ const receiveImages = (req,res,next) => imageUpload.array('images',12)(req,res,e
 const receiveVideos = (req,res,next) => videoUpload.array('videos',3)(req,res,error => error ? res.status(400).json({error:uploadErrorMessage(error,'video')}) : next());
 function createVideoPoster(filePath) {
   const parsed=path.parse(filePath),posterPath=path.join(parsed.dir,parsed.name+'.jpg');
-  return new Promise(resolve=>execFile('ffmpeg',['-nostdin','-v','error','-ss','0.5','-i',filePath,'-frames:v','1','-vf','scale=640:640:force_original_aspect_ratio=decrease','-y',posterPath],{timeout:20000},error=>{
-    if(error){try{fs.unlinkSync(posterPath)}catch{};return resolve(null);}
-    resolve('/uploads/'+path.basename(posterPath));
-  }));
+  return new Promise(resolve=>{
+    const attempt=seconds=>execFile('ffmpeg',['-nostdin','-v','error','-threads','1','-ss',String(seconds),'-i',filePath,'-frames:v','1','-vf','scale=640:640:force_original_aspect_ratio=decrease','-threads','1','-filter_threads','1','-y',posterPath],{timeout:20000},error=>{
+      if(!error&&fs.existsSync(posterPath)&&fs.statSync(posterPath).size>0)return resolve('/uploads/'+path.basename(posterPath));
+      try{fs.unlinkSync(posterPath)}catch{}
+      if(seconds>0)return attempt(0);resolve(null);
+    });attempt(0.5);
+  });
 }
 app.use(require('./public-files')(path.join(__dirname, '..')));
 
@@ -325,6 +328,7 @@ require('./admin-permissions').register(app,{pool,requireAdmin,bcrypt,ownerEmail
 require('./offer-review').register(app,{pool,requireAdmin});
 require('./sol-catalog').register(app,{pool});
 require('./listing-management').register(app,{pool,requireAuth,getCurrentUser});
+require('./listing-cover').register(app,{pool,requireAuth,mediaStore,uploadDir});
 require('./hotel-media').register(app,{pool,requireOfficeMember,ownedHotel,uploadDir,createVideoPoster,mediaStore});
 require('./host-portal').register(app,{pool,requireAuth,requireOfficeMember,ownedHotel});
 

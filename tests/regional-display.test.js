@@ -74,7 +74,7 @@ test('search uses each actual source currency and preserves its observation date
 });
 
 test('regional cards preserve safe source links, display real dates and do not invent media or locations',async()=>{
-  const window={};vm.runInNewContext(await fs.readFile(path.join(__dirname,'../office-card.js'),'utf8'),{window,URL});
+  const window={};vm.runInNewContext(await fs.readFile(path.join(__dirname,'../office-card.js'),'utf8'),{window,URL,ListingCover:require('../listing-cover')});
   const card=window.officeListingCard;
   const basic={id:5,title:'عرض <script>alert(1)</script>',description:'<img src=x onerror=alert(1)>',advertiser_name:'" onclick="alert(1)',media_kind:'none',source_published_at:'2026-09-18T15:00:00Z',observed_at:'2026-09-18T20:00:00Z'};
   for(const [platform,label] of [['facebook','فيسبوك'],['instagram','إنستغرام'],['tiktok','تيك توك']]){

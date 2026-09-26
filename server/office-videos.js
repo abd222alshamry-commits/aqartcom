@@ -50,7 +50,7 @@ module.exports = function registerOfficeVideos(app,{pool,requireAdmin,uploadDir,
       const local = {url:'/uploads/'+name+'.mp4',poster:info.hasPoster?'/uploads/'+name+'.jpg':null,title:listing.title,source_type:'upload',size_bytes:info.size_bytes,duration:info.duration,has_audio:info.has_audio,saved_at:new Date().toISOString()};
       local.url = await batch.add(publishedVideo);
       if (info.hasPoster) local.poster = await batch.add(publishedPoster);
-      const result = await pool.query("UPDATE market_listings SET raw_data=jsonb_set(COALESCE(raw_data,'{}'::jsonb),'{local_video}',$1::jsonb),updated_at=NOW() WHERE id=$2 AND status='published' AND raw_data->>'import_batch'=ANY($3::text[]) RETURNING id",[JSON.stringify(local),listing.id,publishedBatches]);
+      const result = await pool.query("UPDATE market_listings SET cover_media=CASE WHEN cover_media->>'source_url'=raw_data->'local_video'->>'url' THEN NULL ELSE cover_media END,raw_data=jsonb_set(COALESCE(raw_data,'{}'::jsonb),'{local_video}',$1::jsonb),updated_at=NOW() WHERE id=$2 AND status='published' AND raw_data->>'import_batch'=ANY($3::text[]) RETURNING id",[JSON.stringify(local),listing.id,publishedBatches]);
       if (!result.rows.length) throw Error('أُخفي الإعلان أثناء الحفظ. لم يتم استبدال الفيديو.');
       committed = true;
       await batch.commit();

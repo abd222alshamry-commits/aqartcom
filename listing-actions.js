@@ -76,26 +76,27 @@
   if(!Object.hasOwn(kinds,kind)||!/^[1-9]\d{0,17}$/.test(id||''))return;
   host.dataset.actionsReady='1';host.classList.add('listing-actions');
   host.setAttribute('aria-label','إجراءات الإعلان');
-  host.innerHTML='<button type="button" data-listing-share>مشاركة</button><button type="button" data-listing-edit hidden>تعديل</button><button type="button" data-listing-delete class="listing-delete" hidden>حذف</button>';
+  host.innerHTML='<button type="button" data-listing-share>مشاركة</button><button type="button" data-listing-edit hidden>تعديل</button><button type="button" data-listing-cover hidden>صورة العرض</button><button type="button" data-listing-delete class="listing-delete" hidden>حذف</button>';
   host.addEventListener('click',e=>e.stopPropagation());
   host.querySelector('[data-listing-share]').onclick=()=>share(kind,id,host.dataset.title||'إعلان في عقارتكم');
   host.querySelector('[data-listing-edit]').onclick=()=>manage(kind,id,'edit');
+  host.querySelector('[data-listing-cover]').onclick=()=>ListingCover.open(kind,id);
   host.querySelector('[data-listing-delete]').onclick=()=>manage(kind,id,'delete');
  }
  async function scan(){
-  const hosts=[...document.querySelectorAll('[data-listing-kind][data-listing-id]')];hosts.forEach(buttons);for(const h of hosts){const g=grantsCache.get(key(h));if(g&&h.dataset.actionsReady){h.querySelector('[data-listing-edit]').hidden=!g.can_edit;h.querySelector('[data-listing-delete]').hidden=!g.can_delete;}}
+  const hosts=[...document.querySelectorAll('[data-listing-kind][data-listing-id]')];hosts.forEach(buttons);for(const h of hosts){const g=grantsCache.get(key(h));if(g&&h.dataset.actionsReady){h.querySelector('[data-listing-edit]').hidden=!g.can_edit;h.querySelector('[data-listing-cover]').hidden=!g.can_edit;h.querySelector('[data-listing-delete]').hidden=!g.can_delete;}}
   const pending=hosts.filter(h=>h.dataset.actionsReady&&!checked.has(key(h)));if(!pending.length)return;
   const items=[...new Map(pending.map(h=>[key(h),{kind:h.dataset.listingKind,id:h.dataset.listingId}])).values()].slice(0,60);
   const token=permissionVersion;items.forEach(x=>checked.add(x.kind+':'+x.id));
   try{
    const d=await request('/api/listing-management/capabilities','POST',{items});if(token!==permissionVersion)return;
    const grants=new Map(d.data.map(x=>[x.kind+':'+x.id,x]));for(const [k,v] of grants)grantsCache.set(k,v);
-   for(const h of hosts){const grant=grants.get(key(h));if(!grant)continue;h.querySelector('[data-listing-edit]').hidden=!grant.can_edit;h.querySelector('[data-listing-delete]').hidden=!grant.can_delete;}
+   for(const h of hosts){const grant=grants.get(key(h));if(!grant)continue;h.querySelector('[data-listing-edit]').hidden=!grant.can_edit;h.querySelector('[data-listing-cover]').hidden=!grant.can_edit;h.querySelector('[data-listing-delete]').hidden=!grant.can_delete;}
   }catch{ /* Public sharing remains usable when authentication or the network is unavailable. */ }
   if(items.length===60)schedule();
  }
  function schedule(){clearTimeout(timer);timer=setTimeout(scan,30);}
- function refreshPermissions(){permissionVersion++;checked.clear();grantsCache.clear();document.querySelectorAll('[data-listing-edit],[data-listing-delete]').forEach(b=>b.hidden=true);schedule();}
+ function refreshPermissions(){permissionVersion++;checked.clear();grantsCache.clear();document.querySelectorAll('[data-listing-edit],[data-listing-cover],[data-listing-delete]').forEach(b=>b.hidden=true);schedule();}
  function initialize(){
   const host=document.getElementById('siteNav')||document.querySelector('header .container.nav,header nav,header .head-actions,header');
   if(host&&!host.querySelector('a[href="/my-listings.html"]')){const a=document.createElement('a');a.href='/my-listings.html';a.className='listing-manage-link';a.textContent='إدارة الإعلانات';host.append(a);}
