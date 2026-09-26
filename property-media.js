@@ -54,6 +54,7 @@
         <label class="media-picker">📷 إضافة صور<input id="adImages" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple aria-label="إضافة صور للإعلان"></label>
         <label class="media-picker">▶ إضافة فيديو<input id="adVideos" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" multiple aria-label="إضافة فيديو للإعلان"></label>
       </div><p class="media-limits">حتى 12 صورة (8 ميغابايت للصورة) و3 مقاطع فيديو (100 ميغابايت للمقطع).<br>الصور: JPG / PNG / WebP · الفيديو: MP4 / WebM / MOV</p>
+      <p class="media-cover-help">صورة العرض تُختار تلقائيًا من الفيديو، أو من أول صورة عند عدم توفر لقطة. يمكنك اختيار صورة أخرى أدناه؛ تُحفظ مع زر نشر الإعلان.</p>
       <p class="media-selection-status" role="status">اختر من معرض الجوال أو من الملفات.</p>
       <p class="media-error" role="alert" hidden></p><div class="media-previews"></div>`;
     const status = container.querySelector('.media-selection-status');
@@ -74,7 +75,7 @@
         state.textContent = item.uploaded ? '✓ تم الرفع' : item.error || 'جاهز للرفع';
         if (item.error) state.className = 'media-error';
         figure.append(media, caption, state);
-        if (selection?.item === item) {figure.classList.add('cover-selected');const badge=document.createElement('small');badge.textContent=item.kind==='videos'?'صورة العرض: لقطة عند '+selection.seconds.toFixed(1)+' ثانية':'الصورة الرئيسية للعرض';figure.append(badge);}
+        if (selection?.item === item) {figure.classList.add('cover-selected');const badge=document.createElement('small');badge.textContent=item.kind==='videos'?'صورة العرض: لقطة عند '+selection.seconds.toFixed(1)+' ثانية':'الصورة الرئيسية للعرض';badge.textContent+=' — تُحفظ عند نشر الإعلان';figure.append(badge);}
         if (!locked) {
           const choose=document.createElement('button');choose.type='button';choose.className='cover-pick';choose.textContent=item.kind==='images'?'تعيين كصورة العرض':'اعتماد اللقطة الحالية للعرض';
           choose.onclick=()=>{if(item.kind==='videos'&&(!media.videoWidth||media.readyState<2)){error.textContent='انتظر تحميل الفيديو، ثم حرّكه إلى اللقطة المطلوبة.';error.hidden=false;return;}media.pause?.();selection={item,seconds:item.kind==='videos'?media.currentTime:null};coverSaved=false;error.hidden=true;render();};figure.append(choose);

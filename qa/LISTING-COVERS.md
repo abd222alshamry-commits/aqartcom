@@ -17,3 +17,9 @@ Validation:
 - No production listings or bookings were created for tests.
 
 The native Android booking/management WebView uses these live website changes. This release does not rebuild the native Android property screens.
+
+Follow-up save/apply fix, 2026-09-27 (Damascus):
+
+- Cover selection now stages the choice. A persistent “حفظ وتطبيق” footer saves it, closes the dialog and immediately refreshes the displayed listing. A failed save retains the selection for retry; duplicate submissions are disabled.
+- Without an explicit cover, the saved video poster takes priority over listing photos. The cover editor displays this actual automatic image and reset returns to this mode. New-ad guidance explains automatic selection and saving with publication.
+- 18 targeted cover, attachment and gallery tests passed, including explicit-save staging, failure/retry, automatic video priority, reset persistence and dialog close/apply.

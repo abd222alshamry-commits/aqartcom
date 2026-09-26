@@ -6,7 +6,9 @@ const root=path.join(__dirname,'..'),source=n=>fs.readFileSync(path.join(root,n)
 test('cards select real chosen covers, uploaded photos, or actual video posters without stock buildings',()=>{
  const video={url:'/uploads/tour.mp4',poster_url:'/uploads/tour.jpg'};
  assert.equal(cover.url({primary_video:video}),video.poster_url);
- assert.equal(cover.url({image_url:'/uploads/photo.jpg',primary_video:video}),'/uploads/photo.jpg');
+ assert.equal(cover.url({image_url:'/uploads/photo.jpg',primary_video:video}),video.poster_url);
+ assert.equal(cover.url({images:['/uploads/photo.jpg'],videos:[{url:'/uploads/no-poster.mp4'}]}),'/uploads/photo.jpg');
+ assert.equal(cover.url({images:['/uploads/photo.jpg'],rooms:[{videos:[video]}]}),video.poster_url);
  assert.equal(cover.url({cover_media:{url:'/uploads/chosen.jpg'},image_url:'/uploads/photo.jpg',primary_video:video}),'/uploads/chosen.jpg');
  assert.equal(cover.url({type:'شقة',image_url:'/assets/property-building.webp'}),'');
  assert.equal(cover.url({videos:JSON.stringify([video])}),video.poster_url);
@@ -32,7 +34,7 @@ test('cover API authorizes media, extracts selected frame, persists it, checks c
  register(app,{pool,requireAuth:auth,mediaStore:store,uploadDir:dir});const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));const base='http://127.0.0.1:'+server.address().port;
  const endpoint=(kind='property',id=pid)=>'/api/listing-management/'+kind+'/'+id+'/cover';
  async function call(url,body,user='yes'){const r=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(user?{'x-owner':user}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:r.status===401?null:await r.json()};}
- const first=(await call(endpoint())).data;assert.equal(first.media.length,2);assert.equal(first.media[1].can_extract,true);
+ const first=(await call(endpoint())).data;assert.equal(first.media.length,2);assert.equal(first.media[1].can_extract,true);assert.equal(first.effective_cover.url,'/uploads/auto.jpg');
  assert.equal((await call(endpoint(),undefined,'')).status,401);assert.equal((await call(endpoint(),undefined,'other')).status,404);
  const select=async(type,url,extras={},ep=endpoint())=>call(ep,{revision:(await call(ep)).data.revision,type,url,...extras});
  assert.equal((await select('image','/uploads/foreign.jpg')).status,400);
@@ -47,6 +49,7 @@ test('cover API authorizes media, extracts selected frame, persists it, checks c
  const pixel=execFileSync('ffmpeg',['-v','error','-i',file,'-vf','scale=1:1','-f','rawvideo','-pix_fmt','rgb24','pipe:1']);assert.ok(pixel[2]>180&&pixel[0]<70,Array.from(pixel).join(','));
  assert.equal((await call(endpoint())).data.cover.url,picked.data.cover.url);
  assert.equal((await select('video','/uploads/tour.mp4',{seconds:8})).status,400);assert.equal((await call(endpoint())).data.cover.url,picked.data.cover.url);
+ const auto=await select('auto');assert.equal(auto.data.cover,null);assert.equal(auto.data.effective_cover.url,'/uploads/auto.jpg');assert.equal((await call(endpoint())).data.effective_cover.url,'/uploads/auto.jpg');assert.equal(fs.existsSync(file),false);
  await db.query('DELETE FROM property_videos WHERE property_id=$1',[pid]);assert.equal((await call(endpoint())).data.cover,null);
  const hc=await call(endpoint('hotel',hotel));assert.equal(hc.data.media[0].type,'video');assert.equal((await select('video','/uploads/tour.mp4',{},endpoint('hotel',hotel))).data.cover.url,'/uploads/auto.jpg');
  assert.equal((await select('image','https://media.example/photo.jpg',{},endpoint('market',market))).data.status,'pending');
@@ -59,6 +62,8 @@ test('cover editor uses the selected video time and updates its visible preview 
  w.fetch=async(url,opt={})=>{calls.push({url,opt});return {ok:true,json:async()=>opt.method?{ok:true,cover:{url:'/uploads/frame.jpg'},message:'تم حفظ صورة العرض.'}:{revision:'a'.repeat(64),media:[{type:'video',url:'/uploads/tour.mp4',can_extract:true}]}};};
  w.eval(source('listing-cover.js'));await w.ListingCover.editor(w.document.getElementById('editor'),'property',7);
  const input=w.document.querySelector('input');input.value='2.3';[...w.document.querySelectorAll('button')].find(x=>x.textContent==='اعتماد هذه اللقطة').click();
+ assert.equal(calls.filter(c=>c.opt.method==='POST').length,0,'selecting a frame only stages it');assert.match(w.document.querySelector('.cover-status').textContent,/حفظ وتطبيق/);
+ w.document.querySelector('.cover-save').click();
  for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r));
  const body=JSON.parse(calls.find(c=>c.opt.method==='POST').opt.body);assert.equal(body.seconds,2.3);assert.equal(body.url,'/uploads/tour.mp4');assert.equal(w.document.querySelector('.cover-current img').getAttribute('src'),'/uploads/frame.jpg');
 });
@@ -72,4 +77,28 @@ test('new property attachment picker saves the chosen video position after uploa
  const player=w.document.querySelector('video');Object.defineProperty(player,'videoWidth',{value:640});Object.defineProperty(player,'readyState',{value:2});player.currentTime=1.4;
  w.document.querySelector('.cover-pick').click();assert.match(w.document.querySelector('.cover-selected').textContent,/1.4/);media.lock();
  await assert.rejects(media.upload(7),/try again/);assert.equal(uploads,1);fail=false;assert.equal((await media.upload(7)).length,0);assert.equal(uploads,1);assert.equal(requests[1].seconds,1.4);assert.equal(requests[1].url,'/uploads/real.mp4');media.destroy();
+});
+test('explicit save preserves a failed selection for retry and invokes apply once after success',async t=>{
+ const dom=new JSDOM('<section id="editor"></section>',{url:'https://example.test',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window;let fail=true,saves=0,applied=0;
+ w.fetch=async(_url,opt={})=>{if(opt.method){saves++;return {ok:!fail,json:async()=>fail?{error:'تعذر الحفظ؛ أعد المحاولة'}:{cover:{url:'/uploads/photo.jpg'},message:'تم الحفظ'}};}return {ok:true,json:async()=>({revision:'r',cover:{url:'/uploads/old.jpg'},media:[{type:'image',url:'/uploads/photo.jpg'}]})};};
+ w.eval(source('listing-cover.js'));await w.ListingCover.editor(w.document.getElementById('editor'),'property',7,()=>applied++);
+ const save=w.document.querySelector('.cover-save');assert.equal(save.disabled,true);w.document.querySelector('.cover-choice button').click();assert.equal(saves,0);save.click();save.click();
+ for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r));assert.equal(saves,1);assert.equal(applied,0);assert.equal(save.disabled,false);assert.match(w.document.querySelector('.cover-status').textContent,/أعد المحاولة/);
+ fail=false;save.click();for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r));assert.equal(saves,2);assert.equal(applied,1);assert.equal(save.disabled,true);
+});
+test('saving without a manual selection keeps the real video thumbnail automatic',async t=>{
+ const dom=new JSDOM('<section id="editor"></section>',{url:'https://example.test',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window,bodies=[];
+ const media=[{type:'image',url:'/uploads/photo.jpg'},{type:'video',url:'/uploads/tour.mp4',poster:'/uploads/tour.jpg'}];
+ w.fetch=async(_url,opt={})=>({ok:true,json:async()=>{if(opt.method){bodies.push(JSON.parse(opt.body));return {cover:null,effective_cover:{url:'/uploads/tour.jpg'},message:'تم الحفظ'};}return {revision:'r',cover:null,media};}});
+ w.eval(source('listing-cover.js'));await w.ListingCover.editor(w.document.getElementById('editor'),'property',7);
+ assert.equal(w.document.querySelector('.cover-current img').getAttribute('src'),'/uploads/tour.jpg');w.document.querySelector('.cover-save').click();
+ for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r));assert.equal(bodies[0].type,'auto');assert.equal(w.document.querySelector('.cover-current img').getAttribute('src'),'/uploads/tour.jpg');
+});
+test('successful save closes the dialog and immediately applies the change',async t=>{
+ const dom=new JSDOM('<button id="open">فتح</button>',{url:'https://example.test',runScripts:'outside-only'});t.after(()=>dom.window.close());const w=dom.window;let applied=0;
+ w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
+ w.fetch=async(_url,opt={})=>({ok:true,json:async()=>opt.method?{cover:{url:'/uploads/photo.jpg'}}:{revision:'r',media:[{type:'image',url:'/uploads/photo.jpg'}]}});
+ w.eval(source('listing-cover.js'));w.document.getElementById('open').focus();w.ListingCover.open('property',7,()=>applied++);
+ for(let i=0;i<4;i++)await new Promise(r=>setImmediate(r));w.document.querySelector('.cover-choice button').click();w.document.querySelector('.cover-save').click();
+ for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r));assert.equal(w.document.querySelector('dialog'),null);assert.equal(applied,1);assert.equal(w.document.activeElement.id,'open');
 });

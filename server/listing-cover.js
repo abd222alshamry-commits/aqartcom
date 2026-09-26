@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto'),{promisify}=require('node:util'),exec=promisify(require('node:child_process').execFile);
 const {scope,config,validId}=require('./listing-management');
-const {candidates,safeUrl}=require('../listing-cover');
+const {candidates,safeUrl,automatic}=require('../listing-cover');
 const problem=(status,message)=>Object.assign(Error(message),{status});
 async function extractFrame(input,output,seconds){
  await exec('ffmpeg',['-nostdin','-v','error','-threads','1','-protocol_whitelist','file,pipe','-ss',String(seconds),'-i',input,'-map','0:v:0','-frames:v','1','-vf','scale=960:960:force_original_aspect_ratio=decrease','-threads','1','-filter_threads','1','-q:v','3','-y',output],{timeout:25000,maxBuffer:1024*1024});
@@ -24,7 +24,7 @@ function register(app,{pool,requireAuth,mediaStore,uploadDir,frame=extractFrame}
  }
  const handle=fn=>async(req,res)=>{res.set('Cache-Control','no-store');try{await fn(req,res);}catch(e){if(!e.status)console.error('Listing cover:',e.code||e.name);res.status(e.status||503).json({error:e.status?e.message:'تعذر حفظ صورة العرض. أعد المحاولة.'});}};
  app.get('/api/listing-management/:kind/:id/cover',requireAuth,handle(async(req,res)=>{
-  const d=await read(pool,req.user,req.params.kind,req.params.id);res.json({media:d.media,cover:d.row.cover_media,revision:d.revision});
+  const d=await read(pool,req.user,req.params.kind,req.params.id);res.json({media:d.media,cover:d.row.cover_media,effective_cover:d.row.cover_media||automatic(d.row),revision:d.revision});
  }));
  app.post('/api/listing-management/:kind/:id/cover',requireAuth,handle(async(req,res)=>{
   // Authorize before acquiring upload capacity, reading files or processing video.
@@ -59,7 +59,7 @@ function register(app,{pool,requireAuth,mediaStore,uploadDir,frame=extractFrame}
    await client.query('COMMIT');transaction=false;committed=true;await batch.commit();
    const old=state.row.cover_media?.url;
    if(old!==cover?.url&&/^uploads\/cover-[a-f0-9]{32}\.jpg$/.test(mediaStore.keyFromUrl(old)||''))await mediaStore.remove(old).catch(()=>{});
-   res.json({ok:true,cover,status:nextStatus,message:kind==='market'&&req.user.role!=='admin'?'حُفظت الصورة وأُرسل العرض للمراجعة.':'تم حفظ صورة العرض.'});
+   res.json({ok:true,cover,effective_cover:cover||automatic(latest.row),status:nextStatus,message:kind==='market'&&req.user.role!=='admin'?'حُفظت الصورة وأُرسل العرض للمراجعة.':'تم حفظ صورة العرض.'});
   }finally{
    if(transaction)await client.query('ROLLBACK').catch(()=>{});client?.release();
    if(!committed){await batch.rollback();if(output)await fs.unlink(output).catch(()=>{});}
