@@ -65,3 +65,49 @@ test('a slow earlier hotel response cannot replace the current chalet rooms',asy
  assert.match(w.document.getElementById('stats').textContent,/شاليه الاختبار/);
  assert.doesNotMatch(w.document.getElementById('panel').textContent,/غرفة الفندق السابق/);
 });
+test('a slow tab response cannot replace the tab the user selected afterwards',async t=>{
+ const {w}=await page(t);let resolve;
+ w.fetch=()=>new Promise(done=>{resolve=done;});const pending=w.showTab('bookings');
+ await w.showTab('rooms');resolve({ok:true,json:async()=>({data:[]})});await pending;
+ assert.match(w.document.querySelector('#panel h2').textContent,/الغرف والوحدات والأسعار/);
+ assert.equal(w.document.querySelector('.tabs .active').dataset.tab,'rooms');
+});
+test('failed offer submission keeps the form and displays a retryable inline error',async t=>{
+ const {w}=await page(t);w.openOfferForm();const form=w.document.querySelector('#modalBody form');
+ Object.assign(form.elements.name,{value:'عرض اختبار'});form.elements.start_date.value='2030-01-01';form.elements.end_date.value='2030-01-05';form.elements.discount_percent.value='10';
+ w.fetch=async()=>({ok:false,status:503,json:async()=>({error:'تعذر حفظ العرض مؤقتًا'})});
+ await w.saveOffer({preventDefault(){},target:form});
+ assert.match(form.querySelector('[role=alert]').textContent,/تعذر حفظ العرض/);
+ assert.equal(form.elements.name.value,'عرض اختبار');assert.equal(form.querySelector('button').disabled,false);
+ assert.equal(w.document.getElementById('modal').classList.contains('hidden'),false);
+});
+test('double submission saves once and reports success only after the server accepts it',async t=>{
+ const {w}=await page(t);w.openRateForm(19);const form=w.document.querySelector('#modalBody form');
+ form.elements.start_date.value='2030-01-01';form.elements.end_date.value='2030-01-05';form.elements.price.value='50';
+ let resolve,count=0;w.fetch=()=>{count++;return new Promise(done=>{resolve=done;});};
+ const event={preventDefault(){},target:form},first=w.saveRate(event,19);const second=w.saveRate(event,19);
+ assert.equal(count,1);assert.equal(form.querySelector('button').disabled,true);
+ resolve({ok:true,json:async()=>({data:{id:1}})});await first;await second;
+ assert.equal(w.document.getElementById('modal').classList.contains('hidden'),true);
+ assert.match(w.document.getElementById('partnerNotice').textContent,/تم حفظ السعر/);
+});
+test('closing a dialog with Escape restores keyboard focus to its trigger',async t=>{
+ const {w}=await page(t);const trigger=w.document.querySelector('#panel button');trigger.focus();trigger.click();
+ assert.equal(w.document.getElementById('modal').classList.contains('hidden'),false);
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ assert.equal(w.document.getElementById('modal').classList.contains('hidden'),true);assert.equal(w.document.activeElement,trigger);
+});
+test('a completed save from a closed dialog does not close a newer dialog',async t=>{
+ const {w}=await page(t);w.openRateForm(19);const form=w.document.querySelector('#modalBody form');
+ form.elements.start_date.value='2030-01-01';form.elements.end_date.value='2030-01-05';form.elements.price.value='50';
+ let resolve;w.fetch=()=>new Promise(done=>{resolve=done;});const saving=w.saveRate({preventDefault(){},target:form},19);
+ w.closeModal();w.openOfferForm();const newForm=w.document.querySelector('#modalBody form');newForm.elements.name.value='عرض آخر';
+ resolve({ok:true,json:async()=>({data:{id:1}})});await saving;
+ assert.equal(w.document.getElementById('modal').classList.contains('hidden'),false);assert.equal(newForm.elements.name.value,'عرض آخر');
+});
+test('network failure during a non-form action is shown instead of becoming an unhandled rejection',async t=>{
+ const {w}=await page(t);w.fetch=async()=>{throw new TypeError('Failed to fetch');};
+ await w.toggleChannel(1,true);
+ assert.match(w.document.getElementById('partnerNotice').textContent,/تعذر الاتصال/);
+ assert.equal(w.document.getElementById('partnerNotice').getAttribute('role'),'alert');
+});
