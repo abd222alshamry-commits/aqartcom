@@ -52,7 +52,7 @@ fun ServicesScreen(modifier: Modifier, user: User?, open: (String) -> Unit, hist
                 OutlinedButton(history, Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(18.dp)) {
                     Icon(Icons.Default.History, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("الحجوزات المحفوظة في هذا التطبيق")
+                    Text("سجل الحجوزات من النسخ السابقة")
                 }
             }
             item {
@@ -65,6 +65,8 @@ fun ServicesScreen(modifier: Modifier, user: User?, open: (String) -> Unit, hist
 private fun serviceIcon(path: String): ImageVector = when (path) {
     "/sol.html" -> Icons.Default.AutoAwesome
     "/hotels.html" -> Icons.Default.Hotel
+    "/hotels.html#bookings" -> Icons.Default.EventAvailable
+    "/my-listings.html" -> Icons.Default.EditNote
     "/host-portal.html" -> Icons.Default.Key
     "/request-property.html" -> Icons.Default.AddHome
     "/request-dashboard.html" -> Icons.Default.Assignment

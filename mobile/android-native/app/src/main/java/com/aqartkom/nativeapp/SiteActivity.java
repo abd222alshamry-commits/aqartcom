@@ -42,6 +42,8 @@ public class SiteActivity extends ComponentActivity {
 
     private WebView web;
     private boolean pageFailed;
+    private boolean backPending;
+    private android.print.PrintJob activePrintJob;
     private String entryUrl;
     private FrameLayout root;
     private LinearLayout mainLayout;
@@ -85,6 +87,7 @@ public class SiteActivity extends ComponentActivity {
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) getWindow().setDecorFitsSystemWindows(false);
         String path = getIntent().getStringExtra("path");
         entryUrl = SiteAccess.INSTANCE.serviceUrl(path == null ? "/" : path, BuildConfig.API_ORIGIN);
         if (entryUrl == null) { finish(); return; }
@@ -102,7 +105,8 @@ public class SiteActivity extends ComponentActivity {
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                int keyboard = insets.getInsets(WindowInsets.Type.ime()).bottom;
+                view.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, keyboard));
             } else {
                 view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
                     insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
@@ -114,7 +118,7 @@ public class SiteActivity extends ComponentActivity {
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER);
         toolbar.setBackgroundColor(Color.rgb(248, 248, 248));
-        mainLayout.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(42)));
+        mainLayout.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
 
         toolbar.addView(toolbarButton("رجوع", view -> goBack()), new LinearLayout.LayoutParams(0, -1, 1));
         toolbar.addView(toolbarButton("إغلاق", view -> finish()), new LinearLayout.LayoutParams(0, -1, 1));
@@ -135,10 +139,15 @@ public class SiteActivity extends ComponentActivity {
     }
 
     private void shareCurrentPage() {
-        if (web.getUrl() == null || !trusted(Uri.parse(web.getUrl()))) return;
+        if (web.getUrl() == null) return;
+        String publicUrl = SiteAccess.INSTANCE.shareUrl(web.getUrl(), BuildConfig.API_ORIGIN);
+        if (publicUrl == null) {
+            Toast.makeText(this, "هذه صفحة خاصة. شارك رابط المنشأة أو الإعلان بدلًا منها.", Toast.LENGTH_LONG).show();
+            return;
+        }
         Intent send = new Intent(Intent.ACTION_SEND)
             .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, web.getUrl());
+            .putExtra(Intent.EXTRA_TEXT, publicUrl);
         startActivity(Intent.createChooser(send, "مشاركة عقارتكم"));
     }
 
@@ -146,6 +155,8 @@ public class SiteActivity extends ComponentActivity {
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
         settings.setGeolocationEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setAllowFileAccess(false);
@@ -158,6 +169,11 @@ public class SiteActivity extends ComponentActivity {
 
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (SiteAccess.INSTANCE.allowPrint(request.getUrl().toString(), web.getUrl(), BuildConfig.API_ORIGIN, request.isForMainFrame(), request.hasGesture())) {
+                    printCurrentPage();
+                    return true;
+                }
+                if ("aqartkom-app".equals(request.getUrl().getScheme())) return true;
                 if (!request.isForMainFrame()) return false;
                 if (trusted(request.getUrl())) return false;
                 if (request.isForMainFrame() && request.hasGesture()) external(request.getUrl());
@@ -281,10 +297,36 @@ public class SiteActivity extends ComponentActivity {
             : View.SYSTEM_UI_FLAG_VISIBLE);
     }
 
+    private void printCurrentPage() {
+        if (pageFailed || web.getProgress() < 100) {
+            Toast.makeText(this, "انتظر اكتمال تحميل الحجز ثم أعد المحاولة.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (activePrintJob != null && !activePrintJob.isCompleted() && !activePrintJob.isCancelled() && !activePrintJob.isFailed()) return;
+        android.print.PrintManager manager = (android.print.PrintManager) getSystemService(PRINT_SERVICE);
+        if (manager == null) return;
+        try {
+            String name = "Aqartkom booking";
+            activePrintJob = manager.print(name, web.createPrintDocumentAdapter(name), new android.print.PrintAttributes.Builder().build());
+        } catch (RuntimeException e) {
+            Toast.makeText(this, "تعذر فتح نافذة حفظ أو طباعة التأكيد.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void goBack() {
-        if (fullscreenView != null) exitFullscreen();
-        else if (web.canGoBack()) web.goBack();
-        else finish();
+        if (fullscreenView != null) { exitFullscreen(); return; }
+        if (backPending || web == null) return;
+        if (web.getUrl() != null && trusted(Uri.parse(web.getUrl()))) {
+            backPending = true;
+            web.evaluateJavascript(SiteAccess.INSTANCE.getBackScript(), result -> {
+                backPending = false;
+                if (!isFinishing() && !isDestroyed() && !"true".equals(result)) navigateBack();
+            });
+        } else navigateBack();
+    }
+
+    private void navigateBack() {
+        if (web.canGoBack()) web.goBack(); else finish();
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {

@@ -1,6 +1,7 @@
 package com.aqartkom.nativeapp.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -26,7 +27,7 @@ import com.aqartkom.nativeapp.R
 import com.aqartkom.nativeapp.ui.*
 
 @Composable
-fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () -> Unit, onAccount: () -> Unit, onServices: () -> Unit, onSol: () -> Unit, darkMode: Boolean, onDarkMode: () -> Unit) {
+fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () -> Unit, onAccount: () -> Unit, onServices: () -> Unit, onSol: () -> Unit, darkMode: Boolean, onDarkMode: () -> Unit, onStayDestination: (String) -> Unit = { onHotels() }) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(300.dp),
@@ -83,9 +84,14 @@ fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () ->
                             }
                         }
                         Text("إقامة تستحقها", style = MaterialTheme.typography.headlineMedium)
-                        Text("فنادق وشقق مفروشة ومزارع،\nلتختار المكان الذي يشبهك.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFD1E5E4))
+                        Text("فنادق وشاليهات وشقق مفروشة ومزارع،\nلتختار المكان الذي يشبهك.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFD1E5E4))
                         HorizontalDivider(color = Color.White.copy(alpha = .18f))
                         SectionAction("استكشف الفنادق واحجز", Mint)
+                        Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("مشتى الحلو" to "/hotels.html?region=mashta", "دمشق" to "/hotels.html?region=damascus", "شاليهات" to "/hotels.html?lodging_type=chalet").forEach { (name, path) ->
+                                OutlinedButton({ onStayDestination(path) }, shape = RoundedCornerShape(50), border = BorderStroke(1.dp, Mint.copy(alpha = .5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Mint), contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) { Text(name, style = MaterialTheme.typography.labelMedium) }
+                            }
+                        }
                     }
                 }
             }
