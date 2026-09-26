@@ -15,10 +15,10 @@ function harness(t) {
     calls.push(String(url));
     if(String(url).includes('review-bookings'))return {ok:false,status:401,json:async()=>({})};
     if(String(url).endsWith('/reviews'))return {ok:true,json:async()=>({data:[]})};
-    if(String(url).startsWith('/api/hotels?'))return {ok:true,json:async()=>({data:[hotel]})};
-    return {ok:true,json:async()=>({hotel,rooms:[room]})};
+    if(String(url).startsWith('/api/stays/search?'))return {ok:true,json:async()=>({data:[hotel]})};
+    return {ok:true,json:async()=>({hotel,data:[{...room,available:false}]})};
   };
-  for(const file of ['media-gallery.js','hotel-details.js','hotels.js'])run(dom,file);
+  for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])run(dom,file);
   return {dom,w,calls,videos};
 }
 const settle = async()=>{for(let i=0;i<4;i++)await new Promise(r=>setImmediate(r));};
@@ -48,15 +48,15 @@ test('video filter opens the saved room video through the existing player',async
   assert.equal(videos[0].poster_url,'/uploads/poster.jpg');
 });
 test('empty videos stay explicit, the hotel photo/name open details, and failures can be retried',async t=>{
-  const {w,calls}=harness(t);await settle();w.document.querySelector('.hotel-open-photo').click();await settle();assert.ok(calls.includes('/api/hotels/7'));
+  const {w,calls}=harness(t);await settle();w.document.querySelector('.hotel-open-photo').click();await settle();assert.ok(calls.some(u=>u.startsWith('/api/stays/7/availability?')));
   w.closeHotelDetails();w.document.querySelector('.hotel-name').click();await settle();assert.equal(w.document.getElementById('modal').classList.contains('hidden'),false);
   const fetch=w.fetch;w.fetch=async()=>{throw Error('اتصال منقطع');};await w.openHotel(7);assert.match(w.document.querySelector('[role=alert]').textContent,/اتصال منقطع/);
-  w.fetch=async()=>({ok:true,json:async()=>({hotel:{...hotel,videos:[]},rooms:[]})});w.document.getElementById('retryHotel').click();await settle();
+  w.fetch=async()=>({ok:true,json:async()=>({hotel:{...hotel,videos:[]},data:[]})});w.document.getElementById('retryHotel').click();await settle();
   const host=w.document.getElementById('hotelMedia');host.querySelector('[data-filter=video]').click();assert.match(host.textContent,/لا توجد فيديوهات مسجلة/);w.fetch=fetch;
 });
 test('closing while loading ignores the late response',async t=>{
   const {w}=harness(t);await settle();let resolve;w.fetch=()=>new Promise(r=>{resolve=r;});const pending=w.openHotel(7);w.closeHotelDetails();
-  resolve({ok:true,json:async()=>({hotel,rooms:[room]})});await pending;
+  resolve({ok:true,json:async()=>({hotel,data:[{...room,available:false}]})});await pending;
   assert.equal(w.document.getElementById('modal').classList.contains('hidden'),true);assert.equal(w.document.getElementById('hotelMedia'),null);
 });
 test('property gallery exposes every saved image instead of truncating to five',async t=>{

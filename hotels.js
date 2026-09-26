@@ -1,59 +1,73 @@
-const $=id=>document.getElementById(id);let selectedSearch={}, selectedHotel=null;
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-function nights(a,b){return Math.ceil((new Date(b)-new Date(a))/86400000)}
-let hotelSearchVersion=0;
-function updateStayRegion(){
- const city=$('city').value,region=city==='mashta'?'mashta':city==='دمشق'?'damascus':'';
- document.querySelectorAll('[data-stay-region]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.stayRegion===region && (!!region||!city))));
- const url=new URL(location.href);region?url.searchParams.set('region',region):url.searchParams.delete('region');
- $('lodgingType').value?url.searchParams.set('lodging_type',$('lodgingType').value):url.searchParams.delete('lodging_type');history.replaceState(history.state,'',url);
+const $=id=>document.getElementById(id);
+let selectedSearch={},selectedHotel=null,hotelSearchVersion=0;
+const lodgingNames={hotel:'فندق',chalet:'شاليه',farm:'مزرعة للإيجار',furnished_apartment:'شقة مفروشة'};
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function nights(a,b){return (Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000;}
+function stayToday(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Damascus',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function addDays(date,days){return new Date(Date.parse(date+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);}
+function dateLabel(date){const d=String(date||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(d)?new Intl.DateTimeFormat('ar-SY',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}).format(new Date(d+'T12:00:00Z')):'—';}
+function money(amount,currency){return Number(amount||0).toLocaleString('en-US',{maximumFractionDigits:2})+' '+esc(currency||'');}
+function amenities(value){if(typeof value==='string'){try{value=JSON.parse(value);}catch{return [value];}}return Array.isArray(value)?value.filter(x=>typeof x==='string'):[];}
+function amenityChips(value,limit=6){return amenities(value).slice(0,limit).map(a=>`<span class="amenity">${esc(a)}</span>`).join('');}
+async function stayApi(url,options={}){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+ try{const r=await fetch(url,{...options,signal:controller.signal});let j;try{j=await r.json();}catch{throw Error('تعذر قراءة الرد. أعد المحاولة بعد قليل.');}if(!r.ok)throw Object.assign(Error(j.error||'تعذر إكمال الطلب. أعد المحاولة.'),{status:r.status});return j;}
+ catch(e){if(e.name==='AbortError')throw Error('انتهت مهلة الاتصال. تحقق من الإنترنت وأعد المحاولة.');if(e instanceof TypeError)throw Error('تعذر الاتصال. تحقق من الإنترنت وأعد المحاولة.');throw e;}finally{clearTimeout(timer);}
 }
-async function search(){
- const version=++hotelSearchVersion,checkIn=$('checkIn').value,checkOut=$('checkOut').value;
- const status=$('hotelSearchStatus');status.textContent='جارٍ البحث عن الإقامات…';$('hotels').setAttribute('aria-busy','true');updateStayRegion();
- try{
-  if(!checkIn||!checkOut||nights(checkIn,checkOut)<=0)throw Error('اختر تاريخ مغادرة بعد تاريخ الوصول.');
-  const city=$('city').value,params=new URLSearchParams({lodging_type:$('lodgingType')?.value||'',q:$('q').value,city:city==='mashta'?'':city,checkIn,checkOut,adults:$('guests').value,rooms:$('rooms').value});
-  if(city==='mashta')params.set('region','mashta');if($('includeDemo').checked)params.set('includeDemo','true');
-  const r=await fetch('/api/hotels?'+params);const j=await r.json().catch(()=>({error:'تعذر تحميل الإقامات. أعد المحاولة بعد قليل.'}));if(version!==hotelSearchVersion)return;if(!r.ok||!Array.isArray(j.data))throw Error(j.error||'تعذر تحميل الإقامات.');
-  selectedSearch={checkIn,checkOut,adults:Number($('guests').value),rooms:Number($('rooms').value)};
-  render((j.data||[]).filter(h=>$('includeDemo').checked||!isDemoHotel(h)));status.textContent='';
- }catch(error){if(version!==hotelSearchVersion)return;$('count').textContent='';$('hotels').replaceChildren();status.textContent=error instanceof TypeError?'تعذر الاتصال. تحقق من الإنترنت وأعد البحث.':error.message||'تعذر الاتصال. أعد البحث للمحاولة مجددًا.';}
- finally{if(version===hotelSearchVersion)$('hotels').setAttribute('aria-busy','false');}
-}
+function toastStay(message){const el=$('stayToast');el.textContent=message;el.hidden=false;clearTimeout(toastStay.timer);toastStay.timer=setTimeout(()=>el.hidden=true,3500);}
 function isDemoHotel(h){return String(h?.slug||'').startsWith('aqartkom-demo-hotel-v1-')&&String(h?.name||'').startsWith('تجريبي —');}
 function hotelPhotos(h){return MediaGallery.items(h).filter(item=>item.type==='image').map(item=>item.url);}
-function hotelPhoto(h){const url=hotelPhotos(h)[0];return `<button type="button" class="photo hotel-open-photo" onclick="openHotel(${Number(h.id)})" aria-label="عرض صور وتفاصيل ${esc(h.name)}"><span aria-hidden="true">🏨</span>${url?`<img src="${esc(url)}" alt="${isDemoHotel(h)?'صورة توضيحية للاختبار فقط':esc(h.name)}" loading="lazy" onerror="this.remove()">`:''}${isDemoHotel(h)?'<span class="demo-badge">تجريبي — للاختبار فقط</span>':''}</button>`;}
-function render(rows){$('count').textContent=`${rows.length} منشأة`;$('hotels').innerHTML=rows.map(h=>`<article class="card">${hotelPhoto(h)}<div class="cardbody"><h3><button type="button" class="hotel-name" onclick="openHotel(${Number(h.id)})">${esc(h.name)}</button></h3><span class="meta">${esc({hotel:'فندق',furnished_apartment:'شقة مفروشة',farm:'مزرعة للإيجار',chalet:'شاليه'}[h.lodging_type]||'فندق')}</span>${Number(h.star_rating)>0?`<div class="stars">${'★'.repeat(Math.min(5,Math.round(Number(h.star_rating))))} ${Number(h.star_rating)} نجوم</div>`:''}<div class="meta">📍 ${esc(h.city)} ${h.district?'- '+esc(h.district):''}</div><p>${esc((h.description||'').slice(0,120))}</p><div class="price">يبدأ من ${Number(h.min_price||0).toLocaleString()} ${esc((h.currency||'USD'))}</div><div class="meta">${Number(h.review_count)>0?`⭐ ${esc(h.review_score)} · ${Number(h.review_count)} تقييم`:'لا توجد تقييمات بعد'}</div><br><button onclick="openHotel(${h.id})">عرض الوحدات والحجز</button><div data-listing-kind="hotel" data-listing-id="${esc(h.id)}" data-title="${esc(h.name)}"></div></div></article>`).join('')||'<div class="stay-empty"><h3>لا توجد إقامات مطابقة حاليًا</h3><p>جرّب تواريخ أو منطقة أخرى. إذا كنت صاحب منشأة في مشتى الحلو أو دمشق، يمكنك إرسالها للمراجعة.</p><a href="/host-portal.html">أضف منشأتك</a></div>'}
-
-async function openHotel(id){return showHotelDetails(id);}
-async function bookingForm(hotelId,roomId){
-  $('modalBody').innerHTML='<p role="status">جارٍ حساب السعر ووسائل الدفع…</p>';
-  try{
-    const fields={hotel_id:hotelId,room_id:roomId,check_in:selectedSearch.checkIn,check_out:selectedSearch.checkOut,adults:selectedSearch.adults,rooms_count:selectedSearch.rooms};
-    const response=await fetch('/api/mobile/hotels/quote?'+new URLSearchParams(fields));const result=await response.json();if(!response.ok)throw Error(result.error||'تعذر حساب السعر');
-    const quote=result.data,manual=(quote.payment_methods||[]).find(m=>m.id==='shamcash_manual');
-    const key=crypto.randomUUID(),bytes=new Uint8Array(32);crypto.getRandomValues(bytes);const token=Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
-    $('modalBody').innerHTML=`<h2>${isDemoHotel(selectedHotel)?'تجربة الحجز — لا توجد إقامة فعلية':'بيانات الحجز والدفع'}</h2><p>${esc(quote.check_in)} → ${esc(quote.check_out)} · ${quote.nights} ليالٍ · ${quote.rooms_count} غرفة</p><p class="booking-total">الإجمالي: <b>${Number(quote.total).toLocaleString('ar')} ${esc(quote.currency)}</b></p><p>تُتاح التقييمات للحجوزات التي أُجريت من حساب مسجّل. <a href="/host-portal.html?return_to=${encodeURIComponent('/hotels.html?hotel='+hotelId)}">الدخول أو إنشاء حساب قبل الحجز</a></p><section class="payment-note"><h3>شروط الإقامة والإلغاء</h3><p style="white-space:pre-wrap">${esc(quote.cancellation_policy||'راجع شروط المنشأة قبل الحجز')}</p></section><form class="booking" id="bookingForm"><label>اسم الضيف<input name="guest_name" required minlength="2" maxlength="180" autocomplete="name"></label><label>رقم الهاتف<input name="guest_phone" required type="tel" minlength="7" maxlength="80" autocomplete="tel"></label><label>البريد الإلكتروني<input name="guest_email" type="email" maxlength="220" autocomplete="email"></label><label>طريقة الدفع<select name="payment_method" id="paymentMethod"><option value="pay_at_hotel">الدفع عند الوصول</option><option value="shamcash_manual">تحويل عبر شام كاش — مراجعة يدوية</option></select></label><div id="paymentNote" class="payment-note" role="status"></div><label>طلبات خاصة<textarea name="special_requests" maxlength="2000"></textarea></label><label><input name="accept_stay_terms" type="checkbox" required> قرأت شروط الإقامة والإلغاء وأوافق عليها.</label><button id="confirmBooking">تأكيد الحجز</button><p id="bookingError" role="alert"></p></form>`;
-    function updatePayment(){const viaSham=$('paymentMethod').value==='shamcash_manual';$('confirmBooking').disabled=viaSham&&!manual?.available;$('confirmBooking').textContent=viaSham?'إنشاء حجز بانتظار التحويل':'تأكيد الحجز';$('paymentNote').textContent=!viaSham?'تُسدد قيمة الإقامة عند الوصول إلى الفندق.':!manual?.available?(manual?.reason||'بانتظار إعداد حساب الاستلام من الإدارة'):`المبلغ المطلوب تحويله: ${Number(manual.amount).toLocaleString('ar')} ${manual.currency}${manual.exchange_rate?' — بسعر صرف '+Number(manual.exchange_rate).toLocaleString('ar')+' ليرة لكل دولار':''}. يبقى الحجز بانتظار مراجعة الإدارة حتى تؤكد وصول التحويل.`;}
-    $('paymentMethod').onchange=updatePayment;updatePayment();
-    $('bookingForm').onsubmit=async e=>{
-      e.preventDefault();const form=new FormData(e.target),button=$('confirmBooking');button.disabled=true;$('bookingError').textContent='';
-      const method=form.get('payment_method');
-      const body={...fields,guest_name:form.get('guest_name'),guest_phone:form.get('guest_phone'),guest_email:form.get('guest_email'),special_requests:form.get('special_requests'),payment_method:method,expected_total:quote.total,expected_terms_version:quote.terms_version,expected_currency:quote.currency,idempotency_key:key};
-      if(method==='shamcash_manual')Object.assign(body,{payment_access_token:token,payment_settings_version:manual?.settings_version,expected_transfer_amount:manual?.amount,expected_transfer_currency:manual?.currency});
-      try{const r=await fetch('/api/mobile/hotels/book',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw Error(j.error||'تعذر إنشاء الحجز');
-        if(j.manual_payment){$('modalBody').innerHTML=`<div class="success"><h2>أُنشئ الحجز بانتظار التحويل</h2><p>رقم الحجز: <b>${esc(j.data.booking_code)}</b></p><p>انتقل إلى بيانات الاستلام ثم أرسل رقم العملية للمراجعة. لم يُسجل دفع حتى الآن.</p><a class="payment-link" href="${esc(j.manual_payment.checkout_url)}">عرض حساب شام كاش ومتابعة الدفع</a></div>`;}
-        else $('modalBody').innerHTML=`<div class="success"><h2>${isDemoHotel(selectedHotel)?'تم تسجيل حجز تجريبي ✓':'تم تأكيد الحجز ✓'}</h2><p>رقم الحجز: <b>${esc(j.data.booking_code)}</b></p><p>الإجمالي: <b>${Number(j.data.total).toLocaleString('ar')} ${esc(j.data.currency)}</b></p><p>${isDemoHotel(selectedHotel)?'سجل اختبار فقط، ولا يؤكد إقامة أو دفعة حقيقية.':'طريقة الدفع: عند الوصول. احتفظ برقم الحجز.'}</p></div>`;
-      }catch(error){$('bookingError').textContent=error.message;button.disabled=false;}
-    };
-  }catch(error){$('modalBody').innerHTML=`<p role="alert">${esc(error.message)}</p><p>أغلق النافذة وراجع التواريخ والأعداد ثم حاول مجددًا.</p>`;}
+function hotelPhoto(h){const photos=hotelPhotos(h);return `<button type="button" class="photo hotel-open-photo" onclick="openHotel(${Number(h.id)})" aria-label="عرض صور وتفاصيل ${esc(h.name)}"><span aria-hidden="true">⌂</span>${photos[0]?`<img src="${esc(photos[0])}" alt="${esc(h.name)}" loading="lazy" onerror="this.remove()"><span class="photo-count">${photos.length} صور</span>`:''}${isDemoHotel(h)?'<span class="demo-badge">تجريبي — للاختبار فقط</span>':''}</button>`;}
+function updateGuestSummary(){const adults=Number($('guests').value)||1,children=Number($('children').value)||0,rooms=Number($('rooms').value)||1;$('guestSummary').textContent=`${adults+children} ضيوف / وحدة · ${rooms} وحدة`;}
+function searchSelection(){return {checkIn:$('checkIn').value,checkOut:$('checkOut').value,adults:Number($('guests').value),children:Number($('children').value),rooms:Number($('rooms').value)};}
+function stayQuery(s=selectedSearch){return new URLSearchParams(s);}
+function updateStayRegion(){
+ const city=$('city').value,region=city==='mashta'?'mashta':city==='دمشق'?'damascus':'';
+ document.querySelectorAll('[data-stay-region]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.stayRegion===region&& (!!region||!city))));
+ const url=new URL(location.href);for(const key of ['region','city','lodging_type','checkIn','checkOut','adults','children','rooms','q'])url.searchParams.delete(key);
+ if(region)url.searchParams.set('region',region);else if(city)url.searchParams.set('city',city);
+ if($('lodgingType').value)url.searchParams.set('lodging_type',$('lodgingType').value);
+ for(const [key,value] of Object.entries(searchSelection()))url.searchParams.set(key,value);
+ if($('q').value.trim())url.searchParams.set('q',$('q').value.trim());history.replaceState(history.state,'',url);
 }
+async function search(){
+ const version=++hotelSearchVersion,selection=searchSelection(),status=$('hotelSearchStatus');
+ status.textContent='جارٍ التحقق من الأسعار والتوفر…';$('hotels').setAttribute('aria-busy','true');$('count').textContent='';
+ try{
+  const n=nights(selection.checkIn,selection.checkOut);if(!Number.isInteger(n)||n<=0||n>365||selection.checkIn<stayToday())throw Error('اختر تاريخ مغادرة بعد تاريخ الوصول، لمدة لا تتجاوز سنة ومن تاريخ اليوم.');
+  if(!Number.isInteger(selection.adults)||selection.adults<1||selection.adults>20||!Number.isInteger(selection.children)||selection.children<0||selection.children>10||!Number.isInteger(selection.rooms)||selection.rooms<1||selection.rooms>20)throw Error('راجع عدد الضيوف والوحدات.');
+  const city=$('city').value,currency=$('currency').value,sort=$('sort').value;
+  if(sort==='price'&&!currency)throw Error('اختر عملة من خيارات البحث لترتيب أسعار قابلة للمقارنة.');
+  const params=stayQuery(selection);Object.entries({q:$('q').value,city:city==='mashta'?'':city,lodging_type:$('lodgingType').value,currency,sort,minRating:$('minRating').value,maxTotal:currency?$('maxTotal').value:'',amenities:[...document.querySelectorAll('[name=amenity]:checked')].map(el=>el.value).join(',')}).forEach(([k,v])=>params.set(k,v));
+  if(city==='mashta')params.set('region','mashta');if($('includeDemo').checked)params.set('includeDemo','true');
+  const includeDemo=$('includeDemo').checked;selectedSearch=selection;updateStayRegion();$('guestPicker').open=false;
+  $('hotels').innerHTML='<div class="skeleton" aria-hidden="true"></div><div class="skeleton" aria-hidden="true"></div>';
+  const j=await stayApi('/api/stays/search?'+params);if(version!==hotelSearchVersion)return;if(!Array.isArray(j.data))throw Error('تعذر تحميل الإقامات. أعد المحاولة.');
+  render(j.data.filter(h=>includeDemo||!isDemoHotel(h)),selection);status.textContent='';
+  $('searchContext').textContent=city==='mashta'?'إقامتك في مشتى الحلو':city?'إقامتك في '+city:'أماكن لإقامتك القادمة';
+  $('resultsNote').textContent=`${dateLabel(selection.checkIn)} — ${dateLabel(selection.checkOut)} · ${n} ليالٍ · ${selection.rooms} وحدة · الأسعار للإقامة كاملة`;
+ }catch(e){if(version!==hotelSearchVersion)return;$('hotels').innerHTML='<div class="stay-empty"><h3>لم تكتمل عملية البحث</h3><p>راجع الخيارات أو اتصال الإنترنت ثم أعد المحاولة.</p><button type="button" class="outline" onclick="search()">إعادة البحث</button></div>';status.textContent=e.message;}
+ finally{if(version===hotelSearchVersion)$('hotels').setAttribute('aria-busy','false');}
+}
+function render(rows,s=selectedSearch){
+ $('count').textContent=rows.length;
+ $('hotels').innerHTML=rows.map(h=>`<article class="card">${hotelPhoto(h)}<div class="cardbody"><div class="card-top"><div><span class="meta">${esc(lodgingNames[h.lodging_type]||'إقامة')}</span><h3><button type="button" class="hotel-name" onclick="openHotel(${Number(h.id)})">${esc(h.name)}</button></h3></div>${Number(h.review_count)>0?`<div class="rating"><b>${Number(h.review_score).toFixed(1)}</b><span>${Number(h.review_count)} تقييم<br>من 5</span></div>`:''}</div><div class="meta">${esc(h.city)}${h.district?' · '+esc(h.district):''}</div>${Number(h.star_rating)>0?`<div class="stars" aria-label="${Number(h.star_rating)} نجوم">${'★'.repeat(Math.min(5,Math.round(Number(h.star_rating))))}</div>`:''}<p class="card-description">${esc(h.description||'تعرّف إلى الوحدات وصورها وشروط الإقامة.')}</p><div class="amenities">${amenityChips(h.amenities,3)}</div><div class="card-bottom"><div><div class="price-label">الإقامة كاملة، ابتداءً من</div><div class="price">${money(h.from_total,h.currency)}</div><div class="price-detail">${Number(h.nights||nights(s.checkIn,s.checkOut))} ليالٍ · ${Number(h.rooms_count||s.rooms)} وحدة</div>${Number(h.discount_amount)>0?`<div class="discount">توفير ${money(h.discount_amount,h.currency)} ضمن العرض</div>`:''}</div><button type="button" class="primary" onclick="openHotel(${Number(h.id)})">اختر وحدتك <span aria-hidden="true">←</span></button></div><div data-listing-kind="hotel" data-listing-id="${Number(h.id)}" data-title="${esc(h.name)}"></div></div></article>`).join('')||'<div class="stay-empty"><span class="eyebrow">لنبحث عن خيار آخر</span><h3>لا توجد إقامات متاحة بهذه الخيارات</h3><p>جرّب تواريخ أخرى أو وسّع المنطقة والميزانية.<br>لن تظهر منشأة بلا وحدات متاحة للفترة المطلوبة.</p><button type="button" class="outline" onclick="resetStayFilters()">توسيع خيارات البحث</button></div>';
+}
+async function openHotel(id){return showHotelDetails(id);}
+function resetStayFilters(){$('filters').reset();$('currency').value='';$('maxTotal').disabled=true;$('sort').value='recommended';$('q').value='';$('city').value='';search();}
+function adjustDates(a,b){a.min=stayToday();if(a.value){b.min=addDays(a.value,1);if(!b.value||b.value<=a.value)b.value=addDays(a.value,1);}}
 const stayParams=new URLSearchParams(location.search);
-if(stayParams.get('region')==='mashta')$('city').value='mashta';else if(stayParams.get('region')==='damascus')$('city').value='دمشق';
+if(stayParams.get('region')==='mashta')$('city').value='mashta';else if(stayParams.get('region')==='damascus')$('city').value='دمشق';else if(stayParams.get('city'))$('city').value=stayParams.get('city');
 if(['hotel','farm','furnished_apartment','chalet'].includes(stayParams.get('lodging_type')))$('lodgingType').value=stayParams.get('lodging_type');
-document.querySelectorAll('[data-stay-region]').forEach(b=>b.addEventListener('click',()=>{$('city').value=b.dataset.stayRegion==='damascus'?'دمشق':b.dataset.stayRegion;$('q').value='';search();}));
-$('city').addEventListener('change',updateStayRegion);$('includeDemo').addEventListener('change',search);
-$('hotelSearch').addEventListener('submit',e=>{e.preventDefault();search()});$('close').onclick=closeHotelDetails;const now=new Date();$('checkIn').value=new Date(now.getTime()+86400000).toISOString().slice(0,10);$('checkOut').value=new Date(now.getTime()+2*86400000).toISOString().slice(0,10);search();if(typeof location!=='undefined'){const requested=Number(new URLSearchParams(location.search).get('hotel'));if(Number.isSafeInteger(requested)&&requested>0)openHotel(requested);}
-
+for(const [id,param] of [['guests','adults'],['children','children'],['rooms','rooms'],['q','q']])if(stayParams.has(param))$(id).value=stayParams.get(param);
+$('checkIn').value=stayParams.get('checkIn')||addDays(stayToday(),1);$('checkOut').value=stayParams.get('checkOut')||addDays($('checkIn').value||stayToday(),1);adjustDates($('checkIn'),$('checkOut'));
+$('checkIn').onchange=()=>adjustDates($('checkIn'),$('checkOut'));['guests','children','rooms'].forEach(id=>$(id).addEventListener('input',updateGuestSummary));updateGuestSummary();
+$('applyGuests').onclick=()=>{$('guestPicker').open=false;};
+$('hotelSearch').onsubmit=e=>{e.preventDefault();search();};$('filters').onsubmit=e=>{e.preventDefault();search();};$('resetFilters').onclick=resetStayFilters;
+$('currency').onchange=()=>{$('maxTotal').disabled=!$('currency').value;if(!$('currency').value)$('maxTotal').value='';$('maxTotal').placeholder=$('currency').value?'ميزانيتك الإجمالية':'اختر العملة أولًا';};
+$('sort').onchange=search;$('includeDemo').onchange=search;$('city').onchange=updateStayRegion;
+$('myBookings').onclick=showMyBookings;$('close').onclick=closeHotelDetails;
+document.querySelectorAll('[data-stay-region]').forEach(b=>b.onclick=()=>{$('city').value=b.dataset.stayRegion==='damascus'?'دمشق':b.dataset.stayRegion;$('q').value='';search();});
+if(window.matchMedia?.('(max-width:760px)').matches)document.querySelector('.filter-disclosure').open=false;
+selectedSearch=searchSelection();search();const requested=Number(stayParams.get('hotel'));if(Number.isSafeInteger(requested)&&requested>0)openHotel(requested);else if(location.hash==='#bookings')showMyBookings();
 async function loadPublicReviews(id){const box=$('stayReviews');if(!box)return;try{const response=await fetch(`/api/hotels/${id}/reviews`);const d=await response.json();if(!response.ok)throw Error(d.error||'تعذر تحميل التقييمات');if(!box.isConnected)return;box.innerHTML=`<h3>تقييمات الضيوف</h3>${(d.data||[]).map(r=>`<article class="payment-note"><b>${Number(r.rating)} / 5 · ${esc(r.guest_name)}</b>${r.verified_stay?'<small> · إقامة مرتبطة بحجز</small>':''}<h4>${esc(r.title||'')}</h4><p style="white-space:pre-wrap">${esc(r.body)}</p>${r.host_reply?`<p>رد المنشأة: ${esc(r.host_reply)}</p>`:''}</article>`).join('')||'<p>لا توجد تقييمات بعد.</p>'}<div id="reviewFormArea"><p>يمكن للضيف تقييم إقامته بعد المغادرة من الحساب الذي أجرى الحجز.</p></div>`;const eligible=await fetch(`/api/hotels/${id}/review-bookings`);const j=await eligible.json();if(!box.isConnected)return;const area=box.querySelector('#reviewFormArea');if(eligible.status===401){area.innerHTML+=`<a href="/host-portal.html?return_to=${encodeURIComponent('/hotels.html?hotel='+id)}">تسجيل الدخول أو إنشاء حساب</a>`;return;}if(!eligible.ok)throw Error(j.error||'تعذر تحميل حجوزاتك');if(!j.data.length){area.innerHTML+='<p>لا توجد إقامة انتهت ومؤهلة لتقييم جديد في حسابك لهذه المنشأة.</p>';return;}area.innerHTML=`<h4>قيّم إقامتك</h4><form id="stayReviewForm" class="booking"><label>الإقامة<select name="booking_id">${j.data.map(b=>`<option value="${b.id}">${esc(b.booking_code)} · ${esc(String(b.check_out).slice(0,10))}</option>`).join('')}</select></label><label>التقييم<select name="rating"><option value="5">5 — ممتاز</option><option value="4">4 — جيد جدًا</option><option value="3">3 — جيد</option><option value="2">2 — مقبول</option><option value="1">1 — ضعيف</option></select></label><input name="title" maxlength="180" placeholder="عنوان التقييم (اختياري)"><textarea name="body" minlength="3" maxlength="2000" required placeholder="صف تجربتك"></textarea><button>نشر التقييم</button><p id="reviewError" role="alert"></p></form>`;area.querySelector('form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,button=f.querySelector('button');button.disabled=true;try{const r=await fetch(`/api/hotels/${id}/reviews`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(f)))});const result=await r.json();if(!r.ok)throw Error(result.error||'تعذر نشر التقييم');await loadPublicReviews(id);}catch(error){f.querySelector('#reviewError').textContent=error.message;button.disabled=false;}};}catch(e){if(box.isConnected)box.insertAdjacentHTML('beforeend',`<p role="alert">${esc(e.message)}</p>`);}}

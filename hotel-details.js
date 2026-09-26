@@ -1,46 +1,37 @@
-let hotelRequest = 0;
-async function showHotelDetails(id) {
-  const request = ++hotelRequest, body = $('modalBody');
-  $('modal').classList.remove('hidden'); document.body.classList.add('hotel-dialog-open');
-  body.innerHTML = '<p role="status">جارٍ تحميل الإقامة والصور والفيديوهات…</p>'; $('close').focus();
-  try {
-    const response = await fetch('/api/hotels/' + encodeURIComponent(id)), result = await response.json();
-    if (request !== hotelRequest) return;
-    if (!response.ok || !result.hotel) throw Error(result.error || 'تعذر تحميل الإقامة');
-    const hotel = result.hotel, rooms = Array.isArray(result.rooms) ? result.rooms : [];
-    selectedHotel = hotel;
-    body.innerHTML = `<h2>${esc(hotel.name)}</h2>
-      <div data-listing-kind="hotel" data-listing-id="${esc(id)}" data-title="${esc(hotel.name)}"></div>
-      <section id="hotelMedia"></section><p>📍 ${esc(hotel.city)} ${esc(hotel.district || '')}</p>
-      <p>${esc(hotel.description || '')}</p><h3>شروط الإقامة والتأجير</h3>
-      <p style="white-space:pre-wrap">${esc(hotel.rental_terms || 'لم يضف المالك شروطًا خاصة بعد')}</p>
-      <p>الدخول ${esc(hotel.check_in_time || '14:00')} — الخروج ${esc(hotel.check_out_time || '12:00')} بتوقيت دمشق. الإلغاء المجاني حتى ${Number(hotel.free_cancel_hours ?? 24)} ساعة قبل الدخول.</p>
-      <p>${esc(hotel.cancellation_policy || '')}</p><h3>الغرف والوحدات المتاحة</h3>
-      <div class="rooms">${rooms.map(room => `<div class="room"><div class="room-content"><b>${esc(room.name)}</b>
-        <div>${esc(room.room_type)} · ${Number(room.max_guests)} ضيوف · ${esc(room.size_m2 || '-')} م²</div>
-        <strong>${Number(room.price).toLocaleString()} ${esc(room.currency)} / ليلة</strong>
-        <div data-room-media="${esc(room.id)}"></div></div>
-        <button class="room-book" onclick="bookingForm(${Number(id)},${Number(room.id)})">احجز</button></div>`).join('') || '<p>لا توجد وحدات منشورة حاليًا.</p>'}</div>
-      <section id="stayReviews" data-hotel="${esc(id)}"><h3>تقييمات الضيوف</h3><p>جارٍ تحميل التقييمات…</p></section>`;
-    const media = [...MediaGallery.items(hotel, hotel.name), ...rooms.flatMap(room => MediaGallery.items(room, 'الغرفة: ' + room.name))];
-    MediaGallery.mount($('hotelMedia'), media, 'صور وفيديوهات المنشأة والوحدات');
-    body.querySelectorAll('[data-room-media]').forEach(host => {
-      const room = rooms.find(room => String(room.id) === host.dataset.roomMedia);
-      MediaGallery.mount(host, MediaGallery.items(room, 'الغرفة: ' + room.name), 'صور وفيديوهات الغرفة');
-    });
-    loadPublicReviews(id);
-  } catch (error) {
-    if (request !== hotelRequest) return;
-    body.innerHTML = '<p role="alert">' + esc(error.message || 'تعذر الاتصال بالمنشأة') + '</p><button type="button" id="retryHotel">إعادة المحاولة</button>';
-    $('retryHotel').onclick = () => showHotelDetails(id);
-  }
+let hotelRequest=0,dialogReturnFocus=null;
+function beginStayDialog(label){
+ if($('modal').classList.contains('hidden'))dialogReturnFocus=document.activeElement;
+ $('modal').classList.remove('hidden');document.body.classList.add('hotel-dialog-open');$('dialogLabel').textContent=label;
+ document.querySelector('body>header').inert=true;document.querySelector('body>main').inert=true;$('close').focus();
+ $('modalBody').innerHTML='<div class="loading-block" role="status">جارٍ تحميل التفاصيل…</div>';
+ document.querySelector('.modalbox').scrollTop=0;return ++hotelRequest;
 }
-function closeHotelDetails() {
-  hotelRequest++; $('modal').classList.add('hidden'); document.body.classList.remove('hotel-dialog-open');
+function stayPolicies(h){return `<div class="policy-list"><div>تسجيل الوصول<strong>${esc(h.check_in_time||'14:00')}</strong></div><div>تسجيل المغادرة<strong>${esc(h.check_out_time||'12:00')}</strong></div></div><p class="muted">المواعيد بتوقيت دمشق. الإلغاء المجاني حتى ${Number(h.free_cancel_hours??24)} ساعة قبل موعد الدخول.</p>${h.cancellation_policy?`<p>${esc(h.cancellation_policy)}</p>`:''}<h4>شروط المنشأة</h4><p>${esc(h.rental_terms||'لم تضف المنشأة شروطًا خاصة إضافية.')}</p>`;}
+function unitPriceLines(q){return `<dl class="price-lines"><div><dt>${Number(q.nights)} ليالٍ × ${Number(q.rooms_count)} وحدة</dt><dd>${money(q.subtotal,q.currency)}</dd></div>${Number(q.discount_amount||0)>0?`<div class="discount"><dt>خصم العرض</dt><dd>− ${money(q.discount_amount,q.currency)}</dd></div>`:''}<div><dt>رسوم خدمة المنصة</dt><dd>${money(q.service_fee||0,q.currency)}</dd></div><div class="grand-total"><dt>الإجمالي</dt><dd>${money(q.total,q.currency)}</dd></div></dl>${nightlyPrices(q.nightly||q.price_breakdown,q.currency)}<p class="price-detail">السعر حسب بيانات المنشأة، للضيوف والوحدات المحددة. راجع شروط الخدمات الإضافية.</p>`;}
+function nightlyPrices(rows,currency){if(!Array.isArray(rows)||!rows.length)return '';return `<details class="nightly"><summary>تفصيل سعر كل ليلة</summary><table class="nightly-table"><thead><tr><th>الليلة</th><th>الوحدات</th><th>بعد الخصم · ${esc(currency)}</th></tr></thead><tbody>${rows.map(n=>`<tr><td>${dateLabel(n.date)}</td><td>${Number(n.rooms_count)}</td><td>${Number(n.total).toLocaleString('en-US',{maximumFractionDigits:2})}</td></tr>`).join('')}</tbody></table></details>`;}
+async function showHotelDetails(id){
+ const request=beginStayDialog('استكشف الإقامة واختر وحدتك'),s={...selectedSearch},body=$('modalBody');
+ try{
+  const j=await stayApi('/api/stays/'+encodeURIComponent(id)+'/availability?'+stayQuery(s));if(request!==hotelRequest)return;
+  if(!j.hotel||!Array.isArray(j.data))throw Error('تعذر تحميل تفاصيل الإقامة. أعد المحاولة.');
+  const h=j.hotel,rooms=j.data;selectedHotel=h;
+  const available=rooms.filter(r=>r.available);
+  body.innerHTML=`<div class="detail-title"><div><span class="eyebrow">${esc(lodgingNames[h.lodging_type]||'إقامة')}</span><h2>${esc(h.name)}</h2><div class="meta">${esc(h.city)} · ${esc(h.district||h.address||'')}</div></div><button type="button" class="primary" id="goToRooms">عرض الوحدات ${available.length?'('+available.length+')':''} ↓</button></div><div data-listing-kind="hotel" data-listing-id="${Number(id)}" data-title="${esc(h.name)}"></div><section id="hotelMedia"></section><nav class="detail-nav" aria-label="أقسام الإقامة"><a href="#stayOverview">عن المكان</a><a href="#stayUnits">الوحدات والأسعار</a><a href="#stayPolicies">الشروط</a><a href="#stayReviews">التقييمات</a></nav><div class="detail-columns"><div><section class="detail-section" id="stayOverview"><h3>مساحة لرحلتك القادمة</h3><p>${esc(h.description||'راجع صور المكان والوحدات وشروط الإقامة أدناه.')}</p><div class="amenities">${amenityChips(h.amenities,30)}</div>${h.address?`<p class="muted">العنوان: ${esc(h.address)}</p>`:''}</section><section class="detail-section" id="stayUnits"><h3>اختر وحدتك</h3><p class="availability-note">${dateLabel(s.checkIn)} — ${dateLabel(s.checkOut)} · ${nights(s.checkIn,s.checkOut)} ليالٍ · ${s.rooms} وحدة · ${s.adults+(s.children||0)} ضيوف لكل وحدة</p><div class="rooms">${rooms.map(r=>`<article class="room ${r.available?'':'unavailable-room'}"><h4>${esc(r.name)}</h4><div class="meta">${esc(r.room_type||'وحدة إقامة')} · حتى ${Number(r.max_guests)} ضيوف${Number(r.size_m2)>0?' · '+Number(r.size_m2)+' م²':''}${r.bed_type?' · '+esc(r.bed_type):''}</div>${r.description?`<p>${esc(r.description)}</p>`:''}<div class="amenities">${amenityChips(r.amenities)}</div><div data-room-media="${Number(r.id)}"></div>${r.available?`<div class="room-footer"><div><div class="price-label">${s.rooms} وحدة · الإقامة كاملة</div><div class="price">${money(r.quote.total,r.quote.currency)}</div>${r.quote.discount_amount>0?`<div class="discount">توفير ${money(r.quote.discount_amount,r.quote.currency)}</div>`:''}</div><button type="button" class="primary room-book" onclick="bookingForm(${Number(id)},${Number(r.id)})">اختر هذه الوحدة ←</button></div>${nightlyPrices(r.quote.nightly,r.quote.currency)}`:`<p class="unavailable">${esc(r.unavailable_reason||'غير متاحة للفترة المختارة')}</p>`}</article>`).join('')||'<div class="stay-empty"><p>لم تنشر المنشأة وحدات للحجز بعد.</p></div>'}</div></section><section class="detail-section" id="stayPolicies"><h3>ما تحتاج معرفته قبل الحجز</h3>${stayPolicies(j.stay_terms||h)}</section><section class="detail-section" id="stayReviews" data-hotel="${Number(id)}"><h3>تقييمات الضيوف</h3><p>جارٍ تحميل التقييمات…</p></section></div><aside class="detail-aside"><span class="eyebrow">خطّط لإقامتك</span><h3>تواريخ وضيوف مختلفون؟</h3><form id="availabilityForm"><label>الوصول<input id="detailIn" type="date" value="${esc(s.checkIn)}" required></label><label>المغادرة<input id="detailOut" type="date" value="${esc(s.checkOut)}" required></label><div class="guest-inline"><label>بالغون / وحدة<input id="detailAdults" type="number" min="1" max="20" value="${s.adults}" required></label><label>أطفال / وحدة<input id="detailChildren" type="number" min="0" max="10" value="${s.children||0}" required></label><label>الوحدات<input id="detailRooms" type="number" min="1" max="20" value="${s.rooms}" required></label></div><button class="primary" type="submit">تحديث التوفر</button><p class="availability-note">السعر يُحسب لكل ليلة. يُعاد التحقق من التوفر قبل التأكيد.</p></form></aside></div>`;
+  const media=[...MediaGallery.items(h,h.name),...rooms.flatMap(r=>MediaGallery.items(r,'الغرفة: '+r.name))];MediaGallery.mount($('hotelMedia'),media,'صور وفيديوهات المنشأة والوحدات');
+  body.querySelectorAll('[data-room-media]').forEach(host=>{const r=rooms.find(r=>String(r.id)===host.dataset.roomMedia);const media=MediaGallery.items(r,'الغرفة: '+r.name);if(media.length)MediaGallery.mount(host,media,'صور وفيديوهات الوحدة');});
+  const go=target=>{const el=$(target);el?.scrollIntoView({behavior:'smooth',block:'start'});};$('goToRooms').onclick=()=>go('stayUnits');
+  body.querySelectorAll('.detail-nav a').forEach(a=>a.onclick=e=>{e.preventDefault();go(a.hash.slice(1));});
+  adjustDates($('detailIn'),$('detailOut'));$('detailIn').onchange=()=>adjustDates($('detailIn'),$('detailOut'));
+  $('availabilityForm').onsubmit=e=>{e.preventDefault();for(const [main,detail] of [['checkIn','detailIn'],['checkOut','detailOut'],['guests','detailAdults'],['children','detailChildren'],['rooms','detailRooms']])$(main).value=$(detail).value;selectedSearch=searchSelection();updateGuestSummary();search();showHotelDetails(id);};
+  loadPublicReviews(id);
+ }catch(e){if(request!==hotelRequest)return;body.innerHTML=`<div class="stay-empty"><h2>تعذر فتح الإقامة</h2><p role="alert">${esc(e.message)}</p><button type="button" class="outline" id="retryHotel">إعادة المحاولة</button></div>`;$('retryHotel').onclick=()=>showHotelDetails(id);}
 }
-document.addEventListener('DOMContentLoaded', () => {
-  $('modal').addEventListener('click', event => { if (event.target === $('modal')) closeHotelDetails(); });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !event.defaultPrevented && !document.querySelector('.media-image-viewer,.property-video-viewer')) closeHotelDetails();
-  });
+function closeHotelDetails(){hotelRequest++;$('modal').classList.add('hidden');document.body.classList.remove('hotel-dialog-open');document.querySelector('body>header').inert=false;document.querySelector('body>main').inert=false;if(dialogReturnFocus?.isConnected)dialogReturnFocus.focus();}
+document.addEventListener('DOMContentLoaded',()=>{
+ $('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeHotelDetails();});
+ document.addEventListener('keydown',e=>{
+  if($('modal').classList.contains('hidden')||document.querySelector('.media-image-viewer,.property-video-viewer'))return;
+  if(e.key==='Escape'&&!e.defaultPrevented){e.preventDefault();closeHotelDetails();}
+  if(e.key==='Tab'){const all=[...$('modal').querySelectorAll('button,a[href],input,select,textarea,summary,[tabindex="0"]')].filter(el=>!el.disabled&&!el.closest('[hidden],.hidden')&&el.getClientRects().length);const first=all[0],last=all.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}
+ });
 });

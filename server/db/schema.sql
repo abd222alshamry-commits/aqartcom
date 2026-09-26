@@ -1325,3 +1325,6 @@ BEGIN
       CHECK (lodging_type IN ('hotel','furnished_apartment','farm','chalet'));
   END IF;
 END $$;
+
+-- Preserve the confirmed nightly prices even if the host changes future rates.
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS price_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb;

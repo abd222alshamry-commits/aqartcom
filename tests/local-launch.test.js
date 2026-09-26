@@ -28,7 +28,7 @@ test('hotel search supports chalet and town links, visible failure messages, dem
  const w=page(t,'hotels','?region=mashta&lodging_type=chalet'),calls=[];
  const real={id:1,name:'شاليه اختبار محلي',city:'طرطوس',district:'مشتى الحلو',lodging_type:'chalet'},demo={id:2,name:'تجريبي — شاليه',slug:'aqartkom-demo-hotel-v1-chalet'};
  w.fetch=async url=>{calls.push(String(url));return {ok:true,json:async()=>({data:[real,demo]})};};
- for(const file of ['media-gallery.js','hotel-details.js','hotels.js'])w.runScript(source(file));await settle();
+ for(const file of ['media-gallery.js','hotel-details.js','stay-checkout.js','hotels.js'])w.runScript(source(file));await settle();
  const params=new URL(calls[0],'https://qa.invalid').searchParams;assert.equal(params.get('region'),'mashta');assert.equal(params.get('lodging_type'),'chalet');assert.equal(params.get('city'),'');
  assert.equal(w.document.querySelectorAll('#hotels .card').length,1);assert.match(w.document.querySelector('#hotels .meta').textContent,/شاليه/);
  const check=w.document.getElementById('includeDemo');check.click();await settle();assert.equal(w.document.querySelectorAll('#hotels .card').length,2);assert.match(calls.at(-1),/includeDemo=true/);
