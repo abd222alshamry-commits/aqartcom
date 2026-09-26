@@ -1,8 +1,16 @@
 // Pending submissions keep their original key and body through retries and reloads.
 let bookingFlight=false,checkoutDraft=null;
 const stayMemory={};
-function stayRead(key,fallback){try{const saved=sessionStorage.getItem('aq-stay-'+key);if(saved)return JSON.parse(saved);}catch{}return stayMemory[key]??fallback;}
-function stayWrite(key,value){stayMemory[key]=value;try{if(value===null)sessionStorage.removeItem('aq-stay-'+key);else sessionStorage.setItem('aq-stay-'+key,JSON.stringify(value));return true;}catch{return false;}}
+function nativeStayApp(){return Number(navigator.userAgent.match(/AqartkomNative\/(\d+)/)?.[1]||0)>=170;}
+function stayRead(key,fallback){
+ try{const storage=nativeStayApp()?localStorage:sessionStorage;const saved=storage.getItem('aq-stay-'+key);if(saved)return JSON.parse(saved);
+  if(nativeStayApp()){const earlier=sessionStorage.getItem('aq-stay-'+key);if(earlier){storage.setItem('aq-stay-'+key,earlier);sessionStorage.removeItem('aq-stay-'+key);return JSON.parse(earlier);}}
+ }catch{}return stayMemory[key]??fallback;
+}
+function stayWrite(key,value){
+ stayMemory[key]=value;
+ try{const storage=nativeStayApp()?localStorage:sessionStorage;if(value===null){storage.removeItem('aq-stay-'+key);if(nativeStayApp())sessionStorage.removeItem('aq-stay-'+key);}else storage.setItem('aq-stay-'+key,JSON.stringify(value));return true;}catch{return false;}
+}
 function paymentLink(value){if(typeof value!=='string')return '';try{const url=new URL(value,location.origin);return url.origin===location.origin&&url.pathname==='/hotel-payment.html'&&/^#AQH-[A-Z0-9]+:[a-f0-9]{64}$/.test(url.hash)?url.pathname+url.hash:'';}catch{return '';}}
 function rememberBooking(b,url){const list=stayRead('receipts',[]).filter(x=>x.booking_code!==b.booking_code);list.unshift({...b,payment_url:paymentLink(url)});stayWrite('receipts',list.slice(0,50));}
 function timeLabel(value){const d=new Date(value);if(!value||!Number.isFinite(d.getTime()))return 'راجع شروط المنشأة';return new Intl.DateTimeFormat('ar-SY',{timeZone:'Asia/Damascus',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(d)+' بتوقيت دمشق';}
@@ -41,7 +49,7 @@ function drawReviewStep(draft,message=''){
   if(stayRead('pending',null)){showPendingBooking(stayRead('pending',null));return;}
   const body={...draft.fields,...g,expected_total:q.total,expected_currency:q.currency,expected_terms_version:q.terms_version,booking_flow:2,accept_stay_terms:true,idempotency_key:crypto.randomUUID()};
   if(sham){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);Object.assign(body,{payment_access_token:Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join(''),payment_settings_version:manual.settings_version,expected_transfer_amount:manual.amount,expected_transfer_currency:manual.currency});}
-  const pending={body,quote:q,created_at:new Date().toISOString()};const persisted=stayWrite('pending',pending);if(!persisted)toastStay('أبقِ هذه الصفحة مفتوحة حتى يظهر تأكيد الحجز.');
+  const pending={body,quote:q,created_at:new Date().toISOString()};const persisted=stayWrite('pending',pending);if(!persisted){stayWrite('pending',null);$('bookingError').textContent='تعذر حفظ طلب الحجز على الجهاز؛ لم يُرسل الطلب. تحقق من المساحة المتاحة ثم أعد المحاولة.';return;}
   submitStayBooking(pending,draft);
  };
  document.querySelector('.modalbox').scrollTop=0;const heading=$('modalBody').querySelector('.booking-panel h2,.receipt-header h2');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
@@ -78,7 +86,7 @@ function drawBookingReceipt(b,url,newBooking=false){
  const q={...b,subtotal:b.subtotal??b.total,discount_amount:Math.max(0,Number(b.subtotal??b.total)-Number(b.total)),nightly:b.price_breakdown};
  $('modalBody').innerHTML=`${newBooking?checkoutSteps(3):''}<div class="receipt-header"><div class="receipt-icon" aria-hidden="true">${b.status==='confirmed'?'✓':b.status==='cancelled'?'×':'⌁'}</div><h2>${headline}</h2><p class="muted">احتفظ برقم الحجز؛ يتيح عرضه وإدارته، ولا تشاركه علنًا.</p><strong class="receipt-code">${esc(b.booking_code)}</strong><span class="receipt-status">${esc(statusNames[b.status]||b.status)}</span></div><div class="booking-layout"><section class="booking-panel"><h3>تفاصيل إقامتك</h3><dl class="review-details"><div><dt>المنشأة</dt><dd>${esc(b.hotel_name)}</dd></div><div><dt>الوحدة</dt><dd>${esc(b.room_name)}</dd></div><div><dt>حالة الدفع</dt><dd>${b.payment_status==='paid'?'تم الدفع':b.payment_status==='refunded'?'تم رد المبلغ':'لم يُسجّل دفع مؤكد'}</dd></div><div><dt>طريقة الدفع</dt><dd>${b.payment_method==='shamcash_manual'?'شام كاش — مراجعة يدوية':'عند الوصول'}</dd></div></dl>${b.status==='pending'?'<p class="notice warning">هذا الحجز بانتظار التأكيد. إذا اخترت شام كاش، أكمل بيانات التحويل وانتظر مراجعة الإدارة.</p>':''}${paymentUrl&&b.status!=='cancelled'?`<a class="primary" href="${esc(paymentUrl)}">متابعة الدفع عبر شام كاش ←</a>`:''}<h3>الإقامة والإلغاء</h3>${stayPolicies(b.stay_terms_snapshot||{})}<p class="notice">${b.status==='cancelled'?'أُلغي الحجز. إذا سددت مبلغًا، راجع المنشأة أو الإدارة لمتابعة الاسترداد؛ الإلغاء لا يحوّل المال تلقائيًا.':esc(cancellationNote(b))}</p><div class="receipt-actions"><button type="button" class="outline" id="copyBookingCode">نسخ رقم الحجز</button><button type="button" class="outline" id="printBooking">طباعة التأكيد</button><button type="button" class="outline" id="refreshBooking">تحديث الحالة</button>${canCancel?'<button type="button" class="text-button" id="cancelBooking">إلغاء الحجز</button>':''}</div><p id="receiptMessage" role="status" class="muted"></p><div id="cancelArea"></div><button type="button" class="text-button no-print" id="backToBookings">→ جميع حجوزاتي</button></section>${bookingSummary(q,null)}</div>`;
  $('copyBookingCode').onclick=async()=>{try{await navigator.clipboard.writeText(b.booking_code);$('receiptMessage').textContent='تم نسخ رقم الحجز.';}catch{$('receiptMessage').textContent='يمكنك تحديد رقم الحجز أعلاه ونسخه يدويًا.';}};
- $('printBooking').onclick=()=>{document.querySelectorAll('.nightly').forEach(el=>el.open=true);window.print();};
+ $('printBooking').onclick=()=>{document.querySelectorAll('.nightly').forEach(el=>el.open=true);if(nativeStayApp())location.href='aqartkom-app://print';else window.print();};
  $('refreshBooking').onclick=()=>loadBookingReceipt(b.booking_code);$('backToBookings').onclick=showMyBookings;
  if(canCancel)$('cancelBooking').onclick=()=>{
   $('cancelArea').innerHTML=`<form id="cancelForm" class="cancel-form"><h3>هل تريد إلغاء هذه الإقامة؟</h3><p class="muted">سيُحرّر الحجز والوحدات. إذا دفعت مسبقًا، تابع استرداد المبلغ مع الإدارة.</p><label>سبب الإلغاء <small>اختياري</small><textarea name="reason" maxlength="500"></textarea></label><div class="checkout-actions"><button type="button" class="outline" id="keepBooking">الاحتفاظ بالحجز</button><button type="submit" class="primary">نعم، إلغاء الحجز</button></div><p role="alert" id="cancelError"></p></form>`;$('keepBooking').onclick=()=>{$('cancelArea').replaceChildren();};
@@ -95,9 +103,19 @@ async function showMyBookings(){
  const pending=stayRead('pending',null);if(pending){$('pendingStay').innerHTML='<div class="notice warning">يوجد طلب سابق لم تصل نتيجته بعد. <button type="button" class="text-button" id="resumeStay">التحقق من نتيجة الطلب</button></div>';$('resumeStay').onclick=()=>showPendingBooking(pending);}
  $('lookupBooking').onsubmit=e=>{e.preventDefault();loadBookingReceipt(new FormData(e.currentTarget).get('code'));};
  const local=stayRead('receipts',[]);let rows=[...local];
- try{const j=await stayApi('/api/stays/bookings');if(request!==hotelRequest)return;rows=[...(j.data||[]),...local.filter(b=>!j.data?.some(x=>x.booking_code===b.booking_code))];$('bookingsNote').textContent=j.signed_in?'حجوزات حسابك، وما حفظته في هذه الجلسة.':'كضيف، تظهر هنا الحجوزات المحفوظة في جلسة التصفح الحالية فقط. احتفظ برقم حجزك للوصول إليه لاحقًا.';}
- catch(e){if(request!==hotelRequest)return;$('bookingsNote').textContent=e.message+' تظهر أدناه الحجوزات المحفوظة في هذه الجلسة.';}
+ try{const j=await stayApi('/api/stays/bookings');if(request!==hotelRequest)return;rows=[...(j.data||[]),...local.filter(b=>!j.data?.some(x=>x.booking_code===b.booking_code))];$('bookingsNote').textContent=j.signed_in?(nativeStayApp()?'حجوزات حسابك، والسجل المحفوظ على هذا الجهاز.':'حجوزات حسابك، وما حفظته في هذه الجلسة.'):(nativeStayApp()?'كضيف، تظهر هنا الحجوزات المحفوظة على هذا الجهاز. احتفظ برقم الحجز للوصول إليه من جهاز آخر.':'كضيف، تظهر هنا الحجوزات المحفوظة في جلسة التصفح الحالية فقط. احتفظ برقم حجزك للوصول إليه لاحقًا.');}
+ catch(e){if(request!==hotelRequest)return;$('bookingsNote').textContent=e.message+(nativeStayApp()?' تظهر أدناه الحجوزات المحفوظة على الجهاز.':' تظهر أدناه الحجوزات المحفوظة في هذه الجلسة.');}
  if(request!==hotelRequest)return;
  $('bookingList').innerHTML=rows.map((b,i)=>`<button type="button" data-booking-index="${i}"><span><strong>${esc(b.hotel_name)}</strong><small>${dateLabel(b.check_in)} — ${dateLabel(b.check_out)} · ${esc(b.room_name)}</small><small dir="ltr">${esc(b.booking_code)}</small></span><span><strong>${money(b.total,b.currency)}</strong><small>${esc(statusNames[b.status]||b.status)} · عرض التفاصيل ←</small></span></button>`).join('')||'<div class="stay-empty"><h3>لا توجد حجوزات لعرضها هنا</h3><p>يمكنك إدخال رقم حجز سابق أعلاه أو العودة لاختيار إقامتك.</p></div>';
  document.querySelectorAll('[data-booking-index]').forEach(el=>el.onclick=()=>loadBookingReceipt(rows[Number(el.dataset.bookingIndex)].booking_code));
 }
+
+// Android back returns through checkout before leaving the service.
+window.aqartkomNativeBack=function(){
+ if(document.querySelector('.media-image-viewer,.property-video-viewer,.listing-dialog[open]'))return false;
+ if($('modal').classList.contains('hidden'))return false;
+ if($('keepBooking')){$('keepBooking').click();return true;}
+ if($('confirmBookingForm')&&checkoutDraft&&!bookingFlight){drawGuestStep(checkoutDraft);return true;}
+ if($('bookingForm')&&checkoutDraft){openHotel(checkoutDraft.fields.hotel_id);return true;}
+ closeHotelDetails();return true;
+};
