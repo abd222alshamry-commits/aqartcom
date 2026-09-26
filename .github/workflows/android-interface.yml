@@ -1,4 +1,4 @@
-name: Android interface verification
+name: Android release verification
 on:
   pull_request:
     paths: ['mobile/android-native/**', '.github/workflows/android-interface.yml']
@@ -34,7 +34,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aqartkom-1.6.0-interface-verification
+          name: aqartkom-1.7.0-release-verification
           path: |
             mobile/android-native/app/build/outputs/apk/release/*.apk
             mobile/android-native/app/build/outputs/interface-previews/

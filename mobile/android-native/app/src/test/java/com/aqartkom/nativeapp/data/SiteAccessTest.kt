@@ -33,4 +33,24 @@ class SiteAccessTest {
         assertFalse(paths.any { it.startsWith("/admin") || it=="/offer-review.html" });assertEquals(paths.size,paths.distinct().size)
         services.forEach { assertNotNull(SiteAccess.serviceUrl(it.path,origin)) }
     }
+
+    @Test fun `booking links validate references and put secrets only in fragment`() {
+        assertEquals("/hotels.html#booking=AQH-123ABC456", SiteAccess.bookingPath("aqh-123abc456"))
+        for (code in listOf("AQH-X", "AQH-123456&token=x", "javascript:alert(1)", "")) assertNull(SiteAccess.bookingPath(code))
+    }
+    @Test fun `share excludes private checkout and booking capabilities`() {
+        assertNull(SiteAccess.shareUrl("$origin/hotel-payment.html#AQH-123456:secret", origin))
+        assertNull(SiteAccess.shareUrl("$origin/hotels.html#booking=AQH-123456", origin))
+        assertNull(SiteAccess.shareUrl("$origin/admin.html", origin))
+        assertNull(SiteAccess.shareUrl("https://evil.test/hotels.html", origin))
+        assertEquals("$origin/hotels.html?hotel=8", SiteAccess.shareUrl("$origin/hotels.html?hotel=8&access_token=secret#private", origin))
+        assertEquals("$origin/property.html?id=12", SiteAccess.shareUrl("$origin/property.html?id=12", origin))
+    }
+    @Test fun `printing needs explicit gesture in trusted top level document`() {
+        assertTrue(SiteAccess.allowPrint("aqartkom-app://print", "$origin/hotels.html", origin, true, true))
+        assertFalse(SiteAccess.allowPrint("aqartkom-app://print", "$origin/hotels.html", origin, true, false))
+        assertFalse(SiteAccess.allowPrint("aqartkom-app://print", "$origin/hotels.html", origin, false, true))
+        assertFalse(SiteAccess.allowPrint("aqartkom-app://print", "https://evil.test", origin, true, true))
+        assertFalse(SiteAccess.allowPrint("aqartkom-app://print?url=secret", "$origin/", origin, true, true))
+    }
 }

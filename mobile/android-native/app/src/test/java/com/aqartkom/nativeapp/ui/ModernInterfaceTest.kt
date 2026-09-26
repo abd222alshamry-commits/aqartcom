@@ -40,7 +40,7 @@ class ModernInterfaceTest : InterfaceScreenshotTest() {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 AqartkomTheme(dark) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        SectionsScreen(Modifier, { opened = "properties" }, { opened = "hotels" }, { opened = "account" }, { opened = "services" }, { opened = "sol" }, dark) { dark = !dark }
+                        SectionsScreen(Modifier, { opened = "properties" }, { opened = "hotels" }, { opened = "account" }, { opened = "services" }, { opened = "sol" }, dark, { dark = !dark }, { opened = it })
                     }
                 }
             }
@@ -54,6 +54,12 @@ class ModernInterfaceTest : InterfaceScreenshotTest() {
         assertEquals("properties", opened)
         tapItem("استكشف الفنادق واحجز")
         assertEquals("hotels", opened)
+        tapItem("شاليهات")
+        assertEquals("/hotels.html?lodging_type=chalet", opened)
+        tapItem("مشتى الحلو")
+        assertEquals("/hotels.html?region=mashta", opened)
+        tapItem("دمشق")
+        assertEquals("/hotels.html?region=damascus", opened)
         tapItem("دع سول يساعدك")
         assertEquals("sol", opened)
         tapItem("الخدمات ولوحات الإدارة")
@@ -76,9 +82,13 @@ class ModernInterfaceTest : InterfaceScreenshotTest() {
         assertEquals("/sol.html", opened)
         tapItem("بوابة أصحاب الفنادق والمؤجرين")
         assertEquals("/host-portal.html", opened)
+        tapItem("حجوزاتي")
+        assertEquals("/hotels.html#bookings", opened)
+        tapItem("إعلاناتي")
+        assertEquals("/my-listings.html", opened)
         compose.onNodeWithText("لوحة الإدارة").assertDoesNotExist()
         compose.onNodeWithText("المشرفون والصلاحيات").assertDoesNotExist()
-        tapItem("الحجوزات المحفوظة في هذا التطبيق")
+        tapItem("سجل الحجوزات من النسخ السابقة")
         assertEquals("history", opened)
     }
 

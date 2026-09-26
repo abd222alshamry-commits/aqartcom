@@ -61,7 +61,12 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
     val focus = LocalFocusManager.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    fun openSite(path: String) { scope.launch {
+    fun openSite(path: String) {
+        if (path.startsWith("/hotels.html") && !path.startsWith("/hotels.html#booking=") && hotelsViewModel.pending.value != null) {
+            hotelsViewModel.history(); destination = Destination.Hotels
+            return
+        }
+        scope.launch {
         try {
             (context.applicationContext as AqartkomApplication).api.prepareSiteSession()
             context.startActivity(Intent(context, SiteActivity::class.java).putExtra("path", path))
@@ -157,17 +162,17 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
         AnimatedContent(targetState = destination, transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(100)) }, label = "main-navigation") { page ->
             pageState.SaveableStateProvider(page.name) {
                 when (page) {
-                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { openSite("/hotels.html") }, { destination = Destination.Account }, { destination = Destination.Services }, { openSite("/sol.html") }, darkMode, toggleDarkMode)
+                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { openSite("/hotels.html") }, { destination = Destination.Account }, { destination = Destination.Services }, { openSite("/sol.html") }, darkMode, toggleDarkMode, ::openSite)
                     Destination.Services -> ServicesScreen(Modifier.padding(padding), user, ::openSite) { hotelsViewModel.history(); destination = Destination.Hotels }
                     Destination.Home -> HomeScreen(Modifier.padding(padding), home, favorites, compared.map { it.id }.toSet(), darkMode, toggleDarkMode,
                         { collection = CollectionPage.Favorites }, viewModel::openProperty, viewModel::toggleFavorite, viewModel::toggleCompare,
                         viewModel::refreshHome, ::searchFor, { showMap(false) }, { destination = Destination.Add })
-                    Destination.Hotels -> HotelsScreen(Modifier.padding(padding), hotelsViewModel, user) { destination = Destination.Account }
+                    Destination.Hotels -> LegacyBookingsScreen(Modifier.padding(padding), hotelsViewModel, ::openSite) { destination = Destination.Services }
                     Destination.Search -> SearchScreen(Modifier.padding(padding), viewModel, viewModel::openProperty) { showMap(true) }
                     Destination.Map -> MapScreen(Modifier.padding(padding), if (mapFromSearch) search else home, viewModel::openProperty, { if (mapFromSearch) viewModel.refresh() else viewModel.refreshHome() })
                     Destination.Add -> AddPropertyScreen(Modifier.padding(padding), viewModel, user, busy, onLogin = { destination = Destination.Account }) { pageState.removeState(Destination.Add.name); destination = Destination.Home }
                     Destination.Account -> AccountScreen(Modifier.padding(padding), viewModel, user, busy, favorites.size, compared.size, darkMode, toggleDarkMode,
-                        { collection = CollectionPage.Favorites }, { collection = CollectionPage.Compare }, { collection = CollectionPage.MyAds }, { collection = CollectionPage.Inbox }, { destination = Destination.Add }, { openSite("/hotels.html") }, { destination = Destination.Services }, { openSite("/sol.html") })
+                        { collection = CollectionPage.Favorites }, { collection = CollectionPage.Compare }, { openSite("/my-listings.html") }, { collection = CollectionPage.Inbox }, { destination = Destination.Add }, { openSite("/hotels.html") }, { destination = Destination.Services }, { openSite("/sol.html") })
                 }
             }
         }
