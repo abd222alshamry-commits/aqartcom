@@ -30,7 +30,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -48,6 +48,7 @@ public class SiteActivity extends ComponentActivity {
     private FrameLayout root;
     private LinearLayout mainLayout;
     private TextView status;
+    private ProgressBar progress;
     private ValueCallback<Uri[]> fileCallback;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
@@ -71,18 +72,6 @@ public class SiteActivity extends ComponentActivity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
-    }
-
-    private Button toolbarButton(String label, View.OnClickListener listener) {
-        Button button = new Button(this);
-        button.setAllCaps(false);
-        button.setText(label);
-        button.setTextSize(12);
-        button.setMinHeight(0);
-        button.setMinimumHeight(0);
-        button.setPadding(dp(4), 0, dp(4), 0);
-        button.setOnClickListener(listener);
-        return button;
     }
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -114,21 +103,15 @@ public class SiteActivity extends ComponentActivity {
             return insets;
         });
 
-        LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setOrientation(LinearLayout.HORIZONTAL);
-        toolbar.setGravity(Gravity.CENTER);
-        toolbar.setBackgroundColor(Color.rgb(248, 248, 248));
-        mainLayout.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
-
-        toolbar.addView(toolbarButton("رجوع", view -> goBack()), new LinearLayout.LayoutParams(0, -1, 1));
-        toolbar.addView(toolbarButton("إغلاق", view -> finish()), new LinearLayout.LayoutParams(0, -1, 1));
-        toolbar.addView(toolbarButton("تحديث", view -> web.reload()), new LinearLayout.LayoutParams(0, -1, 1));
-        toolbar.addView(toolbarButton("مشاركة", view -> shareCurrentPage()), new LinearLayout.LayoutParams(0, -1, 1));
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        mainLayout.addView(progress, new LinearLayout.LayoutParams(-1, dp(3)));
 
         status = new TextView(this);
         status.setGravity(Gravity.CENTER);
         status.setPadding(dp(8), dp(4), dp(8), dp(4));
-        status.setText("جارٍ الاتصال بعقارتكم…");
+        status.setVisibility(View.GONE);
+        status.setOnClickListener(view -> { if (pageFailed) web.reload(); });
         mainLayout.addView(status, new LinearLayout.LayoutParams(-1, -2));
 
         web = new WebView(this);
@@ -136,19 +119,6 @@ public class SiteActivity extends ComponentActivity {
         configureWebView();
 
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) web.loadUrl(entryUrl);
-    }
-
-    private void shareCurrentPage() {
-        if (web.getUrl() == null) return;
-        String publicUrl = SiteAccess.INSTANCE.shareUrl(web.getUrl(), BuildConfig.API_ORIGIN);
-        if (publicUrl == null) {
-            Toast.makeText(this, "هذه صفحة خاصة. شارك رابط المنشأة أو الإعلان بدلًا منها.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        Intent send = new Intent(Intent.ACTION_SEND)
-            .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, publicUrl);
-        startActivity(Intent.createChooser(send, "مشاركة عقارتكم"));
     }
 
     private void configureWebView() {
@@ -182,11 +152,13 @@ public class SiteActivity extends ComponentActivity {
 
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
                 pageFailed = false;
-                status.setVisibility(View.VISIBLE);
-                status.setText("جارٍ التحميل…");
+                status.setVisibility(View.GONE);
+                progress.setProgress(0);
+                progress.setVisibility(View.VISIBLE);
             }
 
             @Override public void onPageFinished(WebView view, String url) {
+                progress.setVisibility(View.GONE);
                 if (!pageFailed) status.setVisibility(View.GONE);
                 CookieManager.getInstance().flush();
             }
@@ -194,21 +166,27 @@ public class SiteActivity extends ComponentActivity {
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    progress.setVisibility(View.GONE);
                     status.setVisibility(View.VISIBLE);
-                    status.setText("تعذر الاتصال. تحقق من الإنترنت واضغط تحديث.");
+                    status.setText("تعذر الاتصال. اضغط هنا لإعادة المحاولة.");
                 }
             }
 
             @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    progress.setVisibility(View.GONE);
                     status.setVisibility(View.VISIBLE);
-                    status.setText("الخدمة غير متاحة مؤقتًا. اضغط تحديث للمحاولة.");
+                    status.setText("الخدمة غير متاحة مؤقتًا. اضغط هنا لإعادة المحاولة.");
                 }
             }
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            @Override public void onProgressChanged(WebView view, int value) {
+                progress.setProgress(value);
+                progress.setVisibility(value < 100 && !pageFailed ? View.VISIBLE : View.GONE);
+            }
             @Override public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
                 new AlertDialog.Builder(SiteActivity.this).setMessage(message).setPositiveButton("حسنًا", (d, w) -> result.confirm()).setOnCancelListener(d -> result.cancel()).show(); return true;
             }

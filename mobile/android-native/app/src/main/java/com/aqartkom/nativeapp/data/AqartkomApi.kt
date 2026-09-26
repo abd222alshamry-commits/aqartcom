@@ -124,6 +124,25 @@ class AqartkomApi(context: Context) {
         parser.parse(response, market)
     }
 
+    suspend fun canEditCover(id: String): Boolean = withContext(Dispatchers.IO) {
+        coverPath(id) // Validate before creating a request.
+        val item = JSONObject().put("kind", coverKind(id)).put("id", id.removePrefix("market-"))
+        val data = postJson("/api/listing-management/capabilities", JSONObject().put("items", JSONArray().put(item))).optJSONArray("data")
+        data?.objects()?.any { it.optString("kind") == coverKind(id) && it.optString("id") == id.removePrefix("market-") && it.optBoolean("can_edit") } == true
+    }
+
+    suspend fun cover(id: String): CoverState = withContext(Dispatchers.IO) {
+        CoverParser(origin).state(executeJson(Request.Builder().url(origin + coverPath(id)).header("Cache-Control", "no-cache").get().build()))
+    }
+
+    suspend fun saveCover(id: String, choice: CoverChoice, revision: String): CoverSaved = withContext(Dispatchers.IO) {
+        CoverParser(origin).saved(postJson(coverPath(id), choice.request(revision)))
+    }
+
+    fun clearPropertyCache() {
+        preferences.edit().apply { preferences.all.keys.filter { it.startsWith("properties_") }.forEach(::remove) }.apply()
+    }
+
     suspend fun me(): User? = withContext(Dispatchers.IO) {
         val value = executeJson(Request.Builder().url("$origin/api/auth/me").get().build()).optJSONObject("user")
         value?.let(::parseUser)

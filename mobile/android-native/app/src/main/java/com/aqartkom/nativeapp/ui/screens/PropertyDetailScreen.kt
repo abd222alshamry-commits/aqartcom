@@ -42,6 +42,8 @@ import coil.compose.SubcomposeAsyncImage
 import com.aqartkom.nativeapp.data.LoadState
 import com.aqartkom.nativeapp.data.Property
 import com.aqartkom.nativeapp.data.PropertyVideo
+import com.aqartkom.nativeapp.data.galleryVideos
+import androidx.compose.ui.platform.testTag
 import com.aqartkom.nativeapp.data.propertyLink
 import com.aqartkom.nativeapp.data.phoneDigits
 import com.aqartkom.nativeapp.data.dialNumber
@@ -57,11 +59,12 @@ fun PropertyDetailScreen(
     state: LoadState<Property>, favorite: Boolean, onBack: () -> Unit, onFavorite: () -> Unit,
     onRetry: () -> Unit, onMessage: (String) -> Unit,
     onMap: (Property) -> Unit, onCompare: (Property) -> Unit, compared: Boolean,
-    snackbarHost: @Composable () -> Unit = {}
+    snackbarHost: @Composable () -> Unit = {},
+    canEditCover: Boolean = false, onEditCover: () -> Unit = {}
 ) {
     val context = LocalContext.current
     Scaffold(snackbarHost = snackbarHost, bottomBar = { (state as? LoadState.Ready)?.value?.let { ContactBar(it, onMessage) } }, topBar = {
-        TopAppBar(title = { Text("تفاصيل العقار") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, "رجوع") } }, actions = { IconButton(onClick = onFavorite) { Icon(if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "المفضلة", tint = if (favorite) Color(0xFFD33A4A) else LocalContentColor.current) }; IconButton(onClick = { (state as? LoadState.Ready)?.value?.let { p -> context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "${p.title}\n${propertyLink(p)}"), "مشاركة العقار")) } }) { Icon(Icons.Default.Share, "مشاركة") } })
+        TopAppBar(title = { Text("تفاصيل العقار") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, "رجوع") } }, actions = { if (canEditCover) TextButton(onEditCover) { Icon(Icons.Default.Image, null); Text("الغلاف") }; IconButton(onClick = onFavorite) { Icon(if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "المفضلة", tint = if (favorite) Color(0xFFD33A4A) else LocalContentColor.current) }; IconButton(onClick = { (state as? LoadState.Ready)?.value?.let { p -> context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "${p.title}\n${propertyLink(p)}"), "مشاركة العقار")) } }) { Icon(Icons.Default.Share, "مشاركة") } })
     }) { padding ->
         when (state) {
             LoadState.Loading -> Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -76,11 +79,31 @@ fun PropertyDetailScreen(
     var video by remember(p.id) { mutableStateOf<PropertyVideo?>(null) }
     var openImage by remember(p.id) { mutableStateOf<Int?>(null) }
     var expandedDescription by rememberSaveable(p.id) { mutableStateOf(false) }
-    val images = (p.images.map { it.url } + p.imageUrl).filter { it.isNotBlank() }.distinct()
+    val images = p.images.map { it.url }.filter { it.isNotBlank() }.distinct()
+    val videos = p.galleryVideos()
     val pager = rememberPagerState { images.size.coerceAtLeast(1) }
     androidx.compose.foundation.lazy.LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item {
-            Box {
+        if (videos.isNotEmpty()) item {
+            Column(Modifier.padding(18.dp).testTag("detail-videos")) {
+                Text("فيديو العقار", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                videos.forEach { v ->
+                    ElevatedCard(onClick = { openImage = null; video = v }, Modifier.fillMaxWidth().height(112.dp), shape = RoundedCornerShape(18.dp)) {
+                        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(134.dp).fillMaxHeight().background(Color.Black), contentAlignment = Alignment.Center) {
+                                if (v.posterUrl.isNotBlank()) AsyncImage(v.posterUrl, "صورة حقيقية من الفيديو", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                else if (v.sourceType == "upload") VideoThumbnail(v.url, Modifier.fillMaxSize())
+                                Icon(Icons.Default.PlayCircle, "تشغيل", Modifier.size(46.dp), tint = Color.White)
+                            }
+                            Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f).padding(end = 12.dp)) { Text(v.title, fontWeight = FontWeight.Bold, maxLines = 2); Text("اضغط للتشغيل بملء الشاشة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                    Spacer(Modifier.height(9.dp))
+                }
+            }
+        }
+        if (images.isNotEmpty() || videos.isEmpty()) item {
+            Box(Modifier.testTag("detail-photos")) {
                 if (images.isNotEmpty()) HorizontalPager(pager, Modifier.fillMaxWidth().height(300.dp)) { index -> GalleryImage(images[index], p.title, Modifier.fillMaxSize().clickable { video = null; openImage = index }, ContentScale.Crop) }
                 else {
                     val mainVideo = p.primaryVideo
@@ -103,25 +126,6 @@ fun PropertyDetailScreen(
                 Spacer(Modifier.height(12.dp)); Text(p.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(7.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.LocationOn, null, tint = Gold); Text("${p.city}${p.district.takeIf { it.isNotBlank() }?.let { "، $it" }.orEmpty()}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Spacer(Modifier.height(18.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { DetailFact("المساحة", "${p.area?.toInt() ?: "—"} م²", Icons.Default.SquareFoot, Modifier.weight(1f)); DetailFact("الغرف", "${p.rooms ?: "—"}", Icons.Default.Bed, Modifier.weight(1f)); DetailFact("الحمامات", "${p.baths ?: "—"}", Icons.Default.Bathtub, Modifier.weight(1f)) }
-            }
-        }
-        if (p.videos.isNotEmpty() || p.primaryVideo != null) item {
-            Column(Modifier.padding(horizontal = 18.dp)) {
-                Text("فيديو العقار", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(10.dp))
-                (p.videos.ifEmpty { listOfNotNull(p.primaryVideo) }).forEach { v ->
-                    ElevatedCard(onClick = { openImage = null; video = v }, Modifier.fillMaxWidth().height(112.dp), shape = RoundedCornerShape(18.dp)) {
-                        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(134.dp).fillMaxHeight().background(Color.Black), contentAlignment = Alignment.Center) {
-                                if (v.posterUrl.isNotBlank()) AsyncImage(v.posterUrl, "صورة حقيقية من الفيديو", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                else if (v.sourceType == "upload") VideoThumbnail(v.url, Modifier.fillMaxSize())
-                                Icon(Icons.Default.PlayCircle, "تشغيل", Modifier.size(46.dp), tint = Color.White)
-                            }
-                            Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f).padding(end = 12.dp)) { Text(v.title, fontWeight = FontWeight.Bold, maxLines = 2); Text("اضغط للتشغيل بملء الشاشة", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        }
-                    }
-                    Spacer(Modifier.height(9.dp))
-                }
             }
         }
         item {

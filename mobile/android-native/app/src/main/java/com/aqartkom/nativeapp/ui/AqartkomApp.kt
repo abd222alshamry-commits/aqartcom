@@ -6,6 +6,8 @@ import kotlinx.coroutines.launch
 import com.aqartkom.nativeapp.AqartkomApplication
 import com.aqartkom.nativeapp.SiteActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,6 +47,7 @@ private enum class Destination(val label: String, val icon: ImageVector) {
 fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -> Unit) {
     val hotelsViewModel: HotelsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     var destination by rememberSaveable { mutableStateOf(Destination.Sections) }
+    var coverId by rememberSaveable { mutableStateOf<String?>(null) }
     var collection by rememberSaveable { mutableStateOf<CollectionPage?>(null) }
     var mapFromSearch by rememberSaveable { mutableStateOf(false) }
     var mapProperty by remember { mutableStateOf<Property?>(null) }
@@ -61,6 +64,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
     val focus = LocalFocusManager.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val siteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { viewModel.refreshAfterSite() }
     fun openSite(path: String) {
         if (path.startsWith("/hotels.html") && !path.startsWith("/hotels.html#booking=") && hotelsViewModel.pending.value != null) {
             hotelsViewModel.history(); destination = Destination.Hotels
@@ -69,7 +73,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
         scope.launch {
         try {
             (context.applicationContext as AqartkomApplication).api.prepareSiteSession()
-            context.startActivity(Intent(context, SiteActivity::class.java).putExtra("path", path))
+            siteLauncher.launch(Intent(context, SiteActivity::class.java).putExtra("path", path))
         } catch (_: Exception) { viewModel.showMessage("تعذر فتح الخدمة؛ أعد المحاولة") }
     } }
     fun searchFor(filters: SearchFilters) { focus.clearFocus(); viewModel.refresh(filters); destination = Destination.Search; collection = null }
@@ -84,6 +88,14 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
             else -> Unit
         }
     }
+    if (coverId != null) {
+        val id = coverId!!
+        key(id) {
+            CoverEditorScreen(load = { viewModel.loadCover(id) }, save = { choice, revision -> viewModel.saveCover(id, choice, revision) },
+                onSaved = { result -> viewModel.coverSaved(id, result); coverId = null }, onBack = { coverId = null })
+        }
+        return
+    }
     if (mapProperty != null) {
         val property = mapProperty!!
         BackHandler { mapProperty = null }
@@ -95,13 +107,15 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
     if (selected != null) {
         BackHandler(onBack = viewModel::clearSelected)
         val current = (selected as? LoadState.Ready<Property>)?.value
+        var canEdit by remember(current?.id, user?.id) { mutableStateOf(false) }
+        LaunchedEffect(current?.id, user?.id) { canEdit = current?.id?.let { if (user != null) viewModel.canEditCover(it) else false } ?: false }
         pageState.SaveableStateProvider("detail-${current?.id ?: "loading"}") {
             PropertyDetailScreen(state = selected!!, favorite = current?.id in favorites,
                 onBack = viewModel::clearSelected, onFavorite = { current?.id?.let(viewModel::toggleFavorite) },
                 onRetry = viewModel::retrySelected, onMessage = viewModel::showMessage,
                 onMap = { p -> mapProperty = p },
                 onCompare = viewModel::toggleCompare, compared = compared.any { it.id == current?.id },
-                snackbarHost = { SnackbarHost(snackbar) })
+                snackbarHost = { SnackbarHost(snackbar) }, canEditCover = canEdit, onEditCover = { coverId = current?.id })
         }
         return
     }
@@ -170,7 +184,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
                     Destination.Hotels -> LegacyBookingsScreen(Modifier.padding(padding), hotelsViewModel, ::openSite) { destination = Destination.Services }
                     Destination.Search -> SearchScreen(Modifier.padding(padding), viewModel, viewModel::openProperty) { showMap(true) }
                     Destination.Map -> MapScreen(Modifier.padding(padding), if (mapFromSearch) search else home, viewModel::openProperty, { if (mapFromSearch) viewModel.refresh() else viewModel.refreshHome() })
-                    Destination.Add -> AddPropertyScreen(Modifier.padding(padding), viewModel, user, busy, onLogin = { destination = Destination.Account }) { pageState.removeState(Destination.Add.name); destination = Destination.Home }
+                    Destination.Add -> AddPropertyScreen(Modifier.padding(padding), viewModel, user, busy, onLogin = { destination = Destination.Account }) { id -> pageState.removeState(Destination.Add.name); destination = Destination.Home; coverId = id }
                     Destination.Account -> AccountScreen(Modifier.padding(padding), viewModel, user, busy, favorites.size, compared.size, darkMode, toggleDarkMode,
                         { collection = CollectionPage.Favorites }, { collection = CollectionPage.Compare }, { openSite("/my-listings.html") }, { collection = CollectionPage.Inbox }, { destination = Destination.Add }, { openSite("/hotels.html") }, { destination = Destination.Services }, { openSite("/sol.html") })
                 }
