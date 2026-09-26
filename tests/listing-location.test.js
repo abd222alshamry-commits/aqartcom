@@ -98,13 +98,14 @@ test('map groups shared approximate centers without hiding listings and keeps of
   const circles=[],pins=[],nodes={'#summary':{},'#results':{}};
   const L={divIcon:options=>options,circle:(point,options)=>({addTo(){circles.push({point,options});}}),marker:(point,options)=>({addTo(){pins.push({point,options});return this;},bindPopup(html){pins.at(-1).popup=html;}})};
   const basic={source_kind:'office',latitude:34.876333,longitude:36.253671,city:'طرطوس',location_accuracy:'locality',location_label:'مشتى الحلو',location_radius_m:5000,location_approximate:true,price:null};
-  const context={L,map:{latLngToLayerPoint:point=>({x:point[1]*10000,y:point[0]*10000})},markers:{clearLayers(){}},properties:[{...basic,id:'market-7',market_id:7,title:'أول <script>'},{...basic,id:'market-8',market_id:8,title:'ثانٍ'},{id:9,title:'مباشر',latitude:35,longitude:36,price:100,currency:'USD'}],esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),$:selector=>nodes[selector],updateCompare(){}};
+  const context={ListingCover:require('../listing-cover'),L,map:{latLngToLayerPoint:point=>({x:point[1]*10000,y:point[0]*10000})},markers:{clearLayers(){}},properties:[{...basic,id:'market-7',market_id:7,title:'أول <script>'},{...basic,id:'market-8',market_id:8,title:'ثانٍ'},{id:9,title:'مباشر',cover_media:{url:'/uploads/chosen-frame.jpg'},image_url:'/uploads/old.jpg',latitude:35,longitude:36,price:100,currency:'USD'}],esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),$:selector=>nodes[selector],updateCompare(){}};
   vm.runInNewContext(fragment+'\nrender();',context);
   assert.equal(circles.length,1);assert.equal(circles[0].options.radius,5000);assert.equal(pins.length,2);
   assert.match(pins[0].options.icon.html,/2 إعلان/);
   assert.match(pins[0].popup,/office-property\.html\?id=7/);assert.match(pins[0].popup,/office-property\.html\?id=8/);
   assert.match(pins[0].popup,/موقع تقريبي — ليس موقع العقار الدقيق/);
   assert.ok(!pins[0].popup.includes('<script>'));assert.ok(pins[0].popup.includes('&lt;script&gt;'));
+  assert.match(nodes['#results'].innerHTML,/uploads\/chosen-frame\.jpg/);assert.doesNotMatch(nodes['#results'].innerHTML,/uploads\/old\.jpg/);
   assert.match(nodes['#results'].innerHTML,/compare\(9\)/);assert.ok(!nodes['#results'].innerHTML.includes('compare(NaN)'));
   assert.match(nodes['#summary'].innerHTML,/100 USD/);assert.match(nodes['#results'].innerHTML,/السعر عند التواصل/);
 });

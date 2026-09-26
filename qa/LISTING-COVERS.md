@@ -23,3 +23,9 @@ Follow-up save/apply fix, 2026-09-27 (Damascus):
 - Cover selection now stages the choice. A persistent “حفظ وتطبيق” footer saves it, closes the dialog and immediately refreshes the displayed listing. A failed save retains the selection for retry; duplicate submissions are disabled.
 - Without an explicit cover, the saved video poster takes priority over listing photos. The cover editor displays this actual automatic image and reset returns to this mode. New-ad guidance explains automatic selection and saving with publication.
 - 18 targeted cover, attachment and gallery tests passed, including explicit-save staging, failure/retry, automatic video priority, reset persistence and dialog close/apply.
+
+Public-card projection fix, 2026-09-27 (Damascus):
+
+- Reproduced a successful live frame extraction, then identified that the public `/api/properties` SELECT omitted `cover_media` and read an empty legacy `image_url` instead of uploaded photos.
+- Homepage and geographic feeds now include the saved cover, actual first uploaded photo, and video data. Map-result cards use the same cover selection as the homepage.
+- Expanded the real-app HTTP integration audit to save a video frame, save an uploaded photo and reset to automatic, checking both public feeds each time. The audit failed before the fix at “homepage must include the persisted cover” and passed all 66 requests after the fix.

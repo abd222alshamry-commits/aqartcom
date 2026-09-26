@@ -447,7 +447,10 @@ app.post('/api/properties/geo-search',async(req,res)=>{try{
   const add=(sql,v)=>{vals.push(v);where.push(sql.replace('?',`$${vals.length}`));};
   if(b.city)add('p.city=?',b.city);if(b.district)add('p.district=?',String(b.district).trim());if(b.type)add('p.type=?',b.type);if(b.mode)add('p.mode=?',b.mode);if(b.rooms&&b.rooms!=='5+')add('p.rooms=?',Number(b.rooms));if(b.rooms==='5+')where.push('p.rooms>=5');
   if(b.minPrice)add('p.price>=?',Number(b.minPrice));if(b.maxPrice)add('p.price<=?',Number(b.maxPrice));
-  const r=await pool.query(`SELECT p.id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.image_url,p.featured,p.latitude,p.longitude,p.created_at FROM properties p WHERE ${where.join(' AND ')} ORDER BY p.featured DESC,p.created_at DESC LIMIT 500`,vals);
+  const r=await pool.query(`SELECT p.id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.cover_media,
+    COALESCE((SELECT pi.url FROM property_images pi WHERE pi.property_id=p.id ORDER BY pi.sort_order,pi.id LIMIT 1),p.image_url) AS image_url,
+    (SELECT json_build_object('id',pv.id,'url',pv.url,'poster_url',pv.poster_url,'title',pv.title,'source_type',pv.source_type,'is_primary',pv.is_primary) FROM property_videos pv WHERE pv.property_id=p.id ORDER BY pv.is_primary DESC,pv.created_at DESC LIMIT 1) AS primary_video,
+    p.featured,p.latitude,p.longitude,p.created_at FROM properties p WHERE ${where.join(' AND ')} ORDER BY p.featured DESC,p.created_at DESC LIMIT 500`,vals);
   const imported=await require('./office-search').searchOfficeMapListings(pool,b,getFxRate);
   const owned=r.rows.map(require('./listing-location').withFallbackLocation);
   let data=[...owned,...imported].filter(x=>x.latitude!=null&&x.longitude!=null&&(!poly||pointInPolygon(Number(x.latitude),Number(x.longitude),poly)));
@@ -1083,7 +1086,7 @@ app.get('/api/properties', async (req, res) => {
     values.push(safeLimit);
     const limitParam=values.length;
     const result = await pool.query(`
-      SELECT p.id,p.owner_id,p.office_id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.description,p.image_url,p.featured,p.created_at,p.views_count,p.latitude,p.longitude,
+      SELECT p.id,p.owner_id,p.office_id,p.title,p.is_demo,p.type,p.mode,p.city,p.district,p.price,p.currency,p.area,p.rooms,p.baths,p.description,p.cover_media,COALESCE((SELECT pi.url FROM property_images pi WHERE pi.property_id=p.id ORDER BY pi.sort_order,pi.id LIMIT 1),p.image_url) AS image_url,p.featured,p.created_at,p.views_count,p.latitude,p.longitude,
         ROUND((p.price * COALESCE(rt.rate,1) / NULLIF(COALESCE(rf.rate,1),0))::numeric, 2) AS price_display,
         $${displayCurrencyParam}::varchar AS display_currency,
         ${geoSelect},

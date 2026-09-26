@@ -64,6 +64,18 @@ const root=path.resolve(__dirname,'..');
   const videoForm=new FormData();videoForm.append('videos',new Blob([Buffer.from(fs.readFileSync(root+'/qa/fixtures/property-video.b64','utf8').trim(),'base64')],{type:'video/mp4'}),'qa-tour.mp4');
   const video=(await request('/api/me/properties/'+id+'/videos',{method:'POST',cookie:alice.cookie,form:videoForm,expected:201})).value.data[0];uploaded.push(root+video.url);if(video.poster_url)uploaded.push(root+video.poster_url);
   const mediaDetail=(await request('/api/properties/'+id)).value.data;assert.ok(mediaDetail.images.some(x=>x.url===photo.url));assert.ok(video.poster_url);assert.ok(fs.statSync(root+video.poster_url).size>0);assert.equal(mediaDetail.videos.length,1);assert.equal(mediaDetail.videos[0].is_primary,true);
+  const coverEndpoint='/api/listing-management/property/'+id+'/cover',coverClient=require('../listing-cover');
+  async function setCover(choice){const state=(await request(coverEndpoint,{cookie:alice.cookie})).value;return (await request(coverEndpoint,{method:'POST',cookie:alice.cookie,body:{...choice,revision:state.revision}})).value;}
+  async function checkPublicCover(expected){
+   const listing=(await request('/api/properties?includeOffices=true&limit=100')).value.data.find(p=>p.id===id);
+   assert.ok(Object.hasOwn(listing,'cover_media'),'homepage must include the persisted cover');assert.equal(coverClient.url(listing),expected,'homepage uses the selected image');assert.equal(listing.image_url,photo.url,'homepage includes the real uploaded photo');
+   const mapped=(await request('/api/properties/geo-search',{method:'POST',body:{center:{lat:34.86,lng:36.25},radiusKm:1}})).value.data.find(p=>p.id===id);
+   assert.equal(coverClient.url(mapped),expected,'geographic results use the same selected cover');assert.equal(mapped.primary_video.url,video.url,'geographic results preserve video playback');
+  }
+  const selectedFrame=await setCover({type:'video',url:video.url,seconds:0});uploaded.push(root+selectedFrame.cover.url);
+  assert.ok(fs.statSync(root+selectedFrame.cover.url).size>0);await checkPublicCover(selectedFrame.cover.url);
+  await setCover({type:'image',url:photo.url});await checkPublicCover(photo.url);
+  await setCover({type:'auto'});await checkPublicCover(video.poster_url);
   await request('/api/me/properties/'+id+'/videos',{method:'POST',form:new FormData(),expected:401});
   await request('/api/me/recommendations',{expected:401});
   const recommendations=(await request('/api/me/recommendations?limit=3',{cookie:bob.cookie})).value;
