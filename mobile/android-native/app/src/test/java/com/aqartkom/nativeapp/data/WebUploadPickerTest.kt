@@ -7,12 +7,15 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
@@ -21,6 +24,15 @@ import java.io.File
 @Config(application = Application::class, sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WebUploadPickerTest {
+    @Before fun registerAndroidImageMimeTypes() {
+        // Robolectric 4.14's shadow starts without the device's image MIME registry.
+        val types = shadowOf(MimeTypeMap.getSingleton())
+        types.addExtensionMimeTypeMapping("jpg", "image/jpeg")
+        types.addExtensionMimeTypeMapping("jpeg", "image/jpeg")
+        types.addExtensionMimeTypeMapping("png", "image/png")
+        types.addExtensionMimeTypeMapping("webp", "image/webp")
+    }
+
     @Test fun multipleMimeListsOpenDocumentsWithCorrectAndroidFilter() {
         val accepted = arrayOf("image/jpeg,image/png", ".webp")
         val intent = WebUploadPicker.intent(accepted, true, false)
