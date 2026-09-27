@@ -11,7 +11,7 @@ class MediaRegressionTest {
         val result = parser.parse(JSONObject("""{"data":{"id":"11","title":"شقة","images":[{"id":1,"url":"/uploads/front.jpg"},{"id":2,"url":"/uploads/room.jpg"}],"videos":[{"id":8,"url":"/uploads/tour.mp4","source_type":"upload","poster_url":"/uploads/tour.jpg","is_primary":true}],"owner":{"name":"مالك","phone":"+963123"}}} """))
         assertEquals("11", result.id)
         assertEquals(2, result.images.size)
-        assertEquals("https://aqartcom-v93.onrender.com/uploads/front.jpg", result.imageUrl)
+        assertEquals("https://aqartcom-v93.onrender.com/uploads/tour.jpg", result.imageUrl)
         assertEquals("https://aqartcom-v93.onrender.com/uploads/tour.jpg", result.primaryVideo?.posterUrl)
         assertEquals("+963123", result.owner?.phone)
     }

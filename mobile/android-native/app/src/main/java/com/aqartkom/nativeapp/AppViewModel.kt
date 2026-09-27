@@ -156,6 +156,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun retrySelected() { selectedId?.let(::openProperty) }
 
+    suspend fun canEditCover(id: String): Boolean = try { api.canEditCover(id) }
+        catch (e: CancellationException) { throw e } catch (_: Exception) { false }
+    suspend fun loadCover(id: String) = api.cover(id)
+    suspend fun saveCover(id: String, choice: CoverChoice, revision: String) = api.saveCover(id, choice, revision)
+
+    fun coverSaved(id: String, result: CoverSaved) {
+        fun update(p: Property) = if (p.id == id) p.copy(imageUrl = result.imageUrl, status = result.status) else p
+        (_selected.value as? LoadState.Ready)?.let { _selected.value = LoadState.Ready(update(it.value)) }
+        knownProperties[id]?.let { knownProperties[id] = update(it) }
+        (_home.value as? LoadState.Ready)?.let { _home.value = LoadState.Ready(it.value.map(::update).filter { p -> p.status == "active" }) }
+        (_properties.value as? LoadState.Ready)?.let { _properties.value = LoadState.Ready(it.value.map(::update).filter { p -> p.status == "active" }) }
+        (_favoriteListings.value as? LoadState.Ready)?.let { _favoriteListings.value = LoadState.Ready(it.value.map(::update)) }
+        (_dashboard.value as? LoadState.Ready)?.let { _dashboard.value = LoadState.Ready(it.value.copy(properties = it.value.properties.map(::update))) }
+        _comparison.value = _comparison.value.map(::update)
+        api.clearPropertyCache()
+        _message.value = result.message
+    }
+
+    fun refreshAfterSite() {
+        api.clearPropertyCache()
+        knownProperties.clear()
+        refreshSession(); refreshHome()
+        if (_properties.value !is LoadState.Loading) refresh()
+        if (_favoriteListings.value is LoadState.Ready) loadFavoriteListings()
+        if (_dashboard.value is LoadState.Ready) loadDashboard()
+        if (_comparison.value.isNotEmpty()) viewModelScope.launch {
+            val ids = _comparison.value.map { it.id }
+            val refreshed = ids.mapNotNull { id -> try { api.property(id) } catch (e: CancellationException) { throw e } catch (_: Exception) { null } }
+            _comparison.value = _comparison.value.map { p -> refreshed.firstOrNull { it.id == p.id } ?: p }
+        }
+        retrySelected()
+    }
+
     private fun restoreSession() { refreshSession() }
     fun refreshSession() = viewModelScope.launch {
         val request = sessionGeneration.next()
@@ -252,14 +285,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun showMessage(text: String) { _message.value = text }
-    fun finishPartialSubmission(done: () -> Unit) {
+    fun finishPartialSubmission(done: (String) -> Unit) {
         val session = uploadSession ?: return
         if (_busy.value) return
         uploadSession = null
         _uploadProgress.value = UploadProgress()
         _message.value = "تم الاحتفاظ بالإعلان و${session.uploaded} مرفقات؛ لم تُرفع المرفقات المتبقية"
         refresh()
-        done()
+        done(session.propertyId)
     }
     fun clearMessage() { _message.value = null }
 }

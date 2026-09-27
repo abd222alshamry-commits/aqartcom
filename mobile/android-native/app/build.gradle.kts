@@ -13,8 +13,8 @@ android {
         applicationId = "com.aqartkom.mobileapp.v2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 170
-        versionName = "1.7.0"
+        versionCode = 180
+        versionName = "1.8.0"
         buildConfigField("String", "API_ORIGIN", "\"https://aqartcom-v93.onrender.com\"")
         ndk { abiFilters += "arm64-v8a" }
     }

@@ -119,6 +119,23 @@ class DarkInterfaceTest : InterfaceScreenshotTest() {
     }
 }
 
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, sdk = [34], qualifiers = "ar-rSA-w393dp-h852dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class DarkCoverInterfaceTest : InterfaceScreenshotTest() {
+    @Test fun darkCoverSelectionKeepsDarkSurfacesAndVisibleSave() {
+        compose.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { AqartkomTheme(true) {
+                com.aqartkom.nativeapp.ui.screens.CoverEditorScreen(
+                    { com.aqartkom.nativeapp.data.CoverState("r", emptyList(), "", true) },
+                    { _, _ -> com.aqartkom.nativeapp.data.CoverSaved("", "active", "تم الحفظ") }, {}, {})
+            } }
+        }
+        compose.onNodeWithText("حفظ وتطبيق").assertIsDisplayed().assertIsEnabled()
+        snapshot("08-cover-dark")
+    }
+}
+
 abstract class InterfaceScreenshotTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 

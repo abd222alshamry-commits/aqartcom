@@ -33,7 +33,7 @@ import com.aqartkom.nativeapp.data.User
 import coil.compose.AsyncImage
 
 @Composable
-fun AddPropertyScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy: Boolean, onLogin: () -> Unit, done: () -> Unit) {
+fun AddPropertyScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy: Boolean, onLogin: () -> Unit, done: (String) -> Unit) {
     if (user == null) {
         Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.Lock, null, Modifier.size(60.dp), tint = MaterialTheme.colorScheme.primary)
@@ -74,11 +74,11 @@ fun AddPropertyScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, 
         }
         if (images.isNotEmpty() || videos.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 3.dp)) {
-                items(images, key = { "image-$it" }) { uri -> MediaPreview(uri, false) { if (editable) images = images - uri } }
                 items(videos, key = { "video-$it" }) { uri -> MediaPreview(uri, true) { if (editable) videos = videos - uri } }
+                items(images, key = { "image-$it" }) { uri -> MediaPreview(uri, false) { if (editable) images = images - uri } }
             }
         }
-        Text("تعرض بطاقة الفيديو لقطة حقيقية منه. الحد الأقصى 12 صورة و3 فيديوهات بصيغة MP4 أو MOV أو WebM.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("يظهر الفيديو قبل الصور. بعد الرفع يمكنك اختيار صورة الغلاف أو لقطة من الفيديو ثم حفظها. إذا لم تختَر، يُستخدم غلاف الفيديو تلقائيًا، أو أول صورة متاحة.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (progress.savedProperty || progress.error != null) {
             Text(if (progress.savedProperty) "الإعلان محفوظ • تم رفع ${progress.uploaded} من ${progress.total} ملفًا" else "لم يُرسل الإعلان بعد", fontWeight = FontWeight.Bold)
             if (busy && progress.total > 0) LinearProgressIndicator(progress = { progress.uploaded.toFloat() / progress.total }, modifier = Modifier.fillMaxWidth())
@@ -88,7 +88,7 @@ fun AddPropertyScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, 
         Button(
             onClick = {
                 if (title.isBlank() || city.isBlank() || price.toDoubleOrNull() == null) { viewModel.showMessage("أكمل العنوان والمحافظة والسعر") }
-                else viewModel.createProperty(PropertyDraft(title,type,mode,city,district,price,currency,area,rooms,baths,description), context.contentResolver, images + videos) { done() }
+                else viewModel.createProperty(PropertyDraft(title,type,mode,city,district,price,currency,area,rooms,baths,description), context.contentResolver, images + videos, done)
             }, enabled = !busy, modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) else Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text(if (busy) "جارٍ الحفظ والرفع…" else if (progress.savedProperty) "إعادة رفع الملفات المتبقية" else "حفظ الإعلان ورفع الملفات") }
         if (progress.savedProperty && progress.error != null && !busy) {

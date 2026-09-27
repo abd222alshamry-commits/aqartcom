@@ -7,6 +7,7 @@ import android.webkit.JsResult;
 import android.webkit.JsPromptResult;
 import android.widget.EditText;
 import com.aqartkom.nativeapp.data.SiteAccess;
+import com.aqartkom.nativeapp.data.WebUploadPicker;
 
 import android.Manifest;
 import android.content.ActivityNotFoundException;
@@ -30,7 +31,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -48,7 +49,12 @@ public class SiteActivity extends ComponentActivity {
     private FrameLayout root;
     private LinearLayout mainLayout;
     private TextView status;
+    private ProgressBar progress;
     private ValueCallback<Uri[]> fileCallback;
+    private boolean photoSelection;
+    private boolean multipleSelection;
+    private int fileGeneration;
+    private final java.util.concurrent.ExecutorService fileExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private GeolocationPermissions.Callback geolocationCallback;
@@ -71,18 +77,6 @@ public class SiteActivity extends ComponentActivity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
-    }
-
-    private Button toolbarButton(String label, View.OnClickListener listener) {
-        Button button = new Button(this);
-        button.setAllCaps(false);
-        button.setText(label);
-        button.setTextSize(12);
-        button.setMinHeight(0);
-        button.setMinimumHeight(0);
-        button.setPadding(dp(4), 0, dp(4), 0);
-        button.setOnClickListener(listener);
-        return button;
     }
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -114,21 +108,15 @@ public class SiteActivity extends ComponentActivity {
             return insets;
         });
 
-        LinearLayout toolbar = new LinearLayout(this);
-        toolbar.setOrientation(LinearLayout.HORIZONTAL);
-        toolbar.setGravity(Gravity.CENTER);
-        toolbar.setBackgroundColor(Color.rgb(248, 248, 248));
-        mainLayout.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
-
-        toolbar.addView(toolbarButton("رجوع", view -> goBack()), new LinearLayout.LayoutParams(0, -1, 1));
-        toolbar.addView(toolbarButton("إغلاق", view -> finish()), new LinearLayout.LayoutParams(0, -1, 1));
-        toolbar.addView(toolbarButton("تحديث", view -> web.reload()), new LinearLayout.LayoutParams(0, -1, 1));
-        toolbar.addView(toolbarButton("مشاركة", view -> shareCurrentPage()), new LinearLayout.LayoutParams(0, -1, 1));
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        mainLayout.addView(progress, new LinearLayout.LayoutParams(-1, dp(3)));
 
         status = new TextView(this);
         status.setGravity(Gravity.CENTER);
         status.setPadding(dp(8), dp(4), dp(8), dp(4));
-        status.setText("جارٍ الاتصال بعقارتكم…");
+        status.setVisibility(View.GONE);
+        status.setOnClickListener(view -> { if (pageFailed) web.reload(); });
         mainLayout.addView(status, new LinearLayout.LayoutParams(-1, -2));
 
         web = new WebView(this);
@@ -136,19 +124,6 @@ public class SiteActivity extends ComponentActivity {
         configureWebView();
 
         if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) web.loadUrl(entryUrl);
-    }
-
-    private void shareCurrentPage() {
-        if (web.getUrl() == null) return;
-        String publicUrl = SiteAccess.INSTANCE.shareUrl(web.getUrl(), BuildConfig.API_ORIGIN);
-        if (publicUrl == null) {
-            Toast.makeText(this, "هذه صفحة خاصة. شارك رابط المنشأة أو الإعلان بدلًا منها.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        Intent send = new Intent(Intent.ACTION_SEND)
-            .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, publicUrl);
-        startActivity(Intent.createChooser(send, "مشاركة عقارتكم"));
     }
 
     private void configureWebView() {
@@ -182,11 +157,13 @@ public class SiteActivity extends ComponentActivity {
 
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
                 pageFailed = false;
-                status.setVisibility(View.VISIBLE);
-                status.setText("جارٍ التحميل…");
+                status.setVisibility(View.GONE);
+                progress.setProgress(0);
+                progress.setVisibility(View.VISIBLE);
             }
 
             @Override public void onPageFinished(WebView view, String url) {
+                progress.setVisibility(View.GONE);
                 if (!pageFailed) status.setVisibility(View.GONE);
                 CookieManager.getInstance().flush();
             }
@@ -194,21 +171,27 @@ public class SiteActivity extends ComponentActivity {
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    progress.setVisibility(View.GONE);
                     status.setVisibility(View.VISIBLE);
-                    status.setText("تعذر الاتصال. تحقق من الإنترنت واضغط تحديث.");
+                    status.setText("تعذر الاتصال. اضغط هنا لإعادة المحاولة.");
                 }
             }
 
             @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    progress.setVisibility(View.GONE);
                     status.setVisibility(View.VISIBLE);
-                    status.setText("الخدمة غير متاحة مؤقتًا. اضغط تحديث للمحاولة.");
+                    status.setText("الخدمة غير متاحة مؤقتًا. اضغط هنا لإعادة المحاولة.");
                 }
             }
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            @Override public void onProgressChanged(WebView view, int value) {
+                progress.setProgress(value);
+                progress.setVisibility(value < 100 && !pageFailed ? View.VISIBLE : View.GONE);
+            }
             @Override public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
                 new AlertDialog.Builder(SiteActivity.this).setMessage(message).setPositiveButton("حسنًا", (d, w) -> result.confirm()).setOnCancelListener(d -> result.cancel()).show(); return true;
             }
@@ -223,12 +206,19 @@ public class SiteActivity extends ComponentActivity {
                 if (web.getUrl() == null || !trusted(Uri.parse(web.getUrl()))) return false;
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
+                fileGeneration++;
+                multipleSelection = params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
+                photoSelection = "/hotel-partner.html".equals(Uri.parse(web.getUrl()).getPath())
+                    && WebUploadPicker.INSTANCE.imagesOnly(params.getAcceptTypes());
+                Intent picker = WebUploadPicker.INSTANCE.intent(params.getAcceptTypes(), multipleSelection, photoSelection);
                 try {
-                    startActivityForResult(params.createIntent(), FILE_CHOOSER_REQUEST);
+                    startActivityForResult(picker, FILE_CHOOSER_REQUEST);
                 } catch (ActivityNotFoundException e) {
-                    fileCallback.onReceiveValue(null);
-                    fileCallback = null;
-                    Toast.makeText(SiteActivity.this, "لا يوجد تطبيق لاختيار الملف", Toast.LENGTH_LONG).show();
+                    try { startActivityForResult(picker.setAction(Intent.ACTION_GET_CONTENT), FILE_CHOOSER_REQUEST); }
+                    catch (ActivityNotFoundException unavailable) {
+                        fileCallback.onReceiveValue(null); fileCallback = null;
+                        Toast.makeText(SiteActivity.this, "لا يوجد تطبيق لاختيار الملف", Toast.LENGTH_LONG).show();
+                    }
                 }
                 return true;
             }
@@ -332,12 +322,48 @@ public class SiteActivity extends ComponentActivity {
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FILE_CHOOSER_REQUEST && fileCallback != null) {
-            Uri[] selected = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
-            java.util.ArrayList<Uri> safe = new java.util.ArrayList<>();
-            if (selected != null) for (Uri uri : selected) if ("content".equals(uri.getScheme())) safe.add(uri);
-            fileCallback.onReceiveValue(safe.isEmpty() ? null : safe.toArray(new Uri[0]));
-            fileCallback = null;
+            Uri[] selected = WebUploadPicker.INSTANCE.result(resultCode, data, getPackageName() + ".uploads", multipleSelection);
+            if (selected.length == 0 || web.getUrl() == null || !trusted(Uri.parse(web.getUrl()))) {
+                fileCallback.onReceiveValue(null); fileCallback = null;
+                if (resultCode == RESULT_OK) Toast.makeText(this, "تعذر قراءة الملفات المختارة. اخترها من تطبيق الملفات أو المعرض مجددًا.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            final boolean preparePhotos = photoSelection;
+            if (preparePhotos && selected.length > 12) {
+                fileCallback.onReceiveValue(null); fileCallback = null;
+                Toast.makeText(this, "اختر 12 صورة كحد أقصى في كل مرة", Toast.LENGTH_LONG).show(); return;
+            }
+            final int generation = fileGeneration;
+            if (preparePhotos) { status.setText("جارٍ تجهيز الصور للرفع…"); status.setVisibility(View.VISIBLE); }
+            fileExecutor.execute(() -> {
+                try {
+                    java.util.ArrayList<Uri> ready = new java.util.ArrayList<>();
+                    for (Uri uri : selected) {
+                        if (Thread.currentThread().isInterrupted()) return;
+                        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+                        catch (SecurityException ignored) { /* A transient read grant can still be used. */ }
+                        if (preparePhotos) ready.add(((AqartkomApplication)getApplication()).getApi().prepareSitePhoto(uri));
+                        else {
+                            try (java.io.InputStream input = getContentResolver().openInputStream(uri)) {
+                                if (input == null || input.read() == -1) throw new java.io.IOException("الملف فارغ أو غير قابل للقراءة");
+                            }
+                            ready.add(uri);
+                        }
+                    }
+                    runOnUiThread(() -> finishFileSelection(generation, ready.toArray(new Uri[0]), null));
+                } catch (Exception error) {
+                    runOnUiThread(() -> finishFileSelection(generation, null, "تعذر تجهيز الملفات. أعد اختيار الصور من الجهاز بصيغة JPEG أو PNG أو WebP."));
+                }
+            });
         }
+    }
+
+    private void finishFileSelection(int generation, Uri[] files, String error) {
+        if (isDestroyed() || generation != fileGeneration || fileCallback == null) return;
+        if (!pageFailed) status.setVisibility(View.GONE);
+        boolean validPage = web.getUrl() != null && trusted(Uri.parse(web.getUrl()));
+        fileCallback.onReceiveValue(validPage ? files : null); fileCallback = null;
+        if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -360,6 +386,7 @@ public class SiteActivity extends ComponentActivity {
     @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
 
     @Override protected void onDestroy() {
+        fileGeneration++; fileExecutor.shutdownNow();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         if (geolocationCallback != null) geolocationCallback.invoke(geolocationOrigin, false, false);
         exitFullscreen();
