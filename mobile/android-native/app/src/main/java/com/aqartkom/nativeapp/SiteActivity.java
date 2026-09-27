@@ -7,6 +7,7 @@ import android.webkit.JsResult;
 import android.webkit.JsPromptResult;
 import android.widget.EditText;
 import com.aqartkom.nativeapp.data.SiteAccess;
+import com.aqartkom.nativeapp.data.WebUploadPicker;
 
 import android.Manifest;
 import android.content.ActivityNotFoundException;
@@ -50,6 +51,10 @@ public class SiteActivity extends ComponentActivity {
     private TextView status;
     private ProgressBar progress;
     private ValueCallback<Uri[]> fileCallback;
+    private boolean photoSelection;
+    private boolean multipleSelection;
+    private int fileGeneration;
+    private final java.util.concurrent.ExecutorService fileExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private GeolocationPermissions.Callback geolocationCallback;
@@ -201,12 +206,19 @@ public class SiteActivity extends ComponentActivity {
                 if (web.getUrl() == null || !trusted(Uri.parse(web.getUrl()))) return false;
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
+                fileGeneration++;
+                multipleSelection = params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
+                photoSelection = "/hotel-partner.html".equals(Uri.parse(web.getUrl()).getPath())
+                    && WebUploadPicker.INSTANCE.imagesOnly(params.getAcceptTypes());
+                Intent picker = WebUploadPicker.INSTANCE.intent(params.getAcceptTypes(), multipleSelection, photoSelection);
                 try {
-                    startActivityForResult(params.createIntent(), FILE_CHOOSER_REQUEST);
+                    startActivityForResult(picker, FILE_CHOOSER_REQUEST);
                 } catch (ActivityNotFoundException e) {
-                    fileCallback.onReceiveValue(null);
-                    fileCallback = null;
-                    Toast.makeText(SiteActivity.this, "لا يوجد تطبيق لاختيار الملف", Toast.LENGTH_LONG).show();
+                    try { startActivityForResult(picker.setAction(Intent.ACTION_GET_CONTENT), FILE_CHOOSER_REQUEST); }
+                    catch (ActivityNotFoundException unavailable) {
+                        fileCallback.onReceiveValue(null); fileCallback = null;
+                        Toast.makeText(SiteActivity.this, "لا يوجد تطبيق لاختيار الملف", Toast.LENGTH_LONG).show();
+                    }
                 }
                 return true;
             }
@@ -310,12 +322,48 @@ public class SiteActivity extends ComponentActivity {
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FILE_CHOOSER_REQUEST && fileCallback != null) {
-            Uri[] selected = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
-            java.util.ArrayList<Uri> safe = new java.util.ArrayList<>();
-            if (selected != null) for (Uri uri : selected) if ("content".equals(uri.getScheme())) safe.add(uri);
-            fileCallback.onReceiveValue(safe.isEmpty() ? null : safe.toArray(new Uri[0]));
-            fileCallback = null;
+            Uri[] selected = WebUploadPicker.INSTANCE.result(resultCode, data, getPackageName() + ".uploads", multipleSelection);
+            if (selected.length == 0 || web.getUrl() == null || !trusted(Uri.parse(web.getUrl()))) {
+                fileCallback.onReceiveValue(null); fileCallback = null;
+                if (resultCode == RESULT_OK) Toast.makeText(this, "تعذر قراءة الملفات المختارة. اخترها من تطبيق الملفات أو المعرض مجددًا.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            final boolean preparePhotos = photoSelection;
+            if (preparePhotos && selected.length > 12) {
+                fileCallback.onReceiveValue(null); fileCallback = null;
+                Toast.makeText(this, "اختر 12 صورة كحد أقصى في كل مرة", Toast.LENGTH_LONG).show(); return;
+            }
+            final int generation = fileGeneration;
+            if (preparePhotos) { status.setText("جارٍ تجهيز الصور للرفع…"); status.setVisibility(View.VISIBLE); }
+            fileExecutor.execute(() -> {
+                try {
+                    java.util.ArrayList<Uri> ready = new java.util.ArrayList<>();
+                    for (Uri uri : selected) {
+                        if (Thread.currentThread().isInterrupted()) return;
+                        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+                        catch (SecurityException ignored) { /* A transient read grant can still be used. */ }
+                        if (preparePhotos) ready.add(((AqartkomApplication)getApplication()).getApi().prepareSitePhoto(uri));
+                        else {
+                            try (java.io.InputStream input = getContentResolver().openInputStream(uri)) {
+                                if (input == null || input.read() == -1) throw new java.io.IOException("الملف فارغ أو غير قابل للقراءة");
+                            }
+                            ready.add(uri);
+                        }
+                    }
+                    runOnUiThread(() -> finishFileSelection(generation, ready.toArray(new Uri[0]), null));
+                } catch (Exception error) {
+                    runOnUiThread(() -> finishFileSelection(generation, null, "تعذر تجهيز الملفات. أعد اختيار الصور من الجهاز بصيغة JPEG أو PNG أو WebP."));
+                }
+            });
         }
+    }
+
+    private void finishFileSelection(int generation, Uri[] files, String error) {
+        if (isDestroyed() || generation != fileGeneration || fileCallback == null) return;
+        if (!pageFailed) status.setVisibility(View.GONE);
+        boolean validPage = web.getUrl() != null && trusted(Uri.parse(web.getUrl()));
+        fileCallback.onReceiveValue(validPage ? files : null); fileCallback = null;
+        if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -338,6 +386,7 @@ public class SiteActivity extends ComponentActivity {
     @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
 
     @Override protected void onDestroy() {
+        fileGeneration++; fileExecutor.shutdownNow();
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         if (geolocationCallback != null) geolocationCallback.invoke(geolocationOrigin, false, false);
         exitFullscreen();

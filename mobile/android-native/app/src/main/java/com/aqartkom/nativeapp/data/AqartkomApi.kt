@@ -291,6 +291,18 @@ class AqartkomApi(context: Context) {
         } finally { bitmap.recycle() }
     }
 
+    /** A phone photo becomes a bounded JPEG in a dedicated, non-exported upload directory. */
+    fun prepareSitePhoto(uri: Uri): Uri {
+        val directory = File(appContext.cacheDir, "web-upload-images").apply { mkdirs() }
+        directory.listFiles().orEmpty().filter { System.currentTimeMillis() - it.lastModified() > 86_400_000L }.forEach { it.delete() }
+        val jpeg = prepareJpeg(appContext.contentResolver, uri)
+        val output = File(directory, jpeg.name)
+        try {
+            check(jpeg.renameTo(output)) { "تعذر تجهيز الصورة للرفع" }
+            return androidx.core.content.FileProvider.getUriForFile(appContext, appContext.packageName + ".uploads", output)
+        } catch (e: Exception) { jpeg.delete(); output.delete(); throw e }
+    }
+
     private fun decodeSampledBitmap(resolver: ContentResolver, uri: Uri, max: Int): Bitmap {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
