@@ -36,7 +36,7 @@ function searchHandler(pool,stay){return async(req,res)=>{try{
   else if(req.query.sort==='rating')data.sort((a,b)=>Number(b.review_score||0)-Number(a.review_score||0)||Number(b.review_count)-Number(a.review_count));
   res.json({data,nights:s.nights,pricing:'per_night',currency:currency||null});
  }catch(e){send(res,e);}};}
-function register(app,{pool,getCurrentUser,syncHotel,stay,receipt}){
+function register(app,{pool,getCurrentUser,syncHotel,stay,receipt,bookingApproval}){
  app.get('/api/stays/search',searchHandler(pool,stay));
  app.get('/api/stays/:id/availability',async(req,res)=>{try{
   res.set('Cache-Control','no-store');const base=selection(req.query,stay);
@@ -46,10 +46,11 @@ function register(app,{pool,getCurrentUser,syncHotel,stay,receipt}){
   res.json({data:result,hotel:publicHotel(h),stay_terms:policy.snapshot(h)});
  }catch(e){send(res,e);}});
  const bookingSelect=`SELECT b.*,h.name hotel_name,h.city hotel_city,h.district hotel_district,r.name room_name FROM hotel_bookings b JOIN hotels h ON h.id=b.hotel_id JOIN hotel_rooms r ON r.id=b.room_id`;
- const present=b=>({...receipt(b,b.hotel_name,b.room_name),hotel_city:b.hotel_city,hotel_district:b.hotel_district,can_cancel:['pending','confirmed'].includes(b.status)&&!!b.cancellation_deadline&&Date.now()<=new Date(b.cancellation_deadline).getTime(),refund_eligible:b.payment_status==='paid'});
+ const present=b=>({...receipt(b,b.hotel_name,b.room_name),hotel_city:b.hotel_city,hotel_district:b.hotel_district,can_cancel:['pending','confirmed'].includes(b.status)&&(b.approval_status==='pending'||(!!b.cancellation_deadline&&Date.now()<=new Date(b.cancellation_deadline).getTime())),refund_eligible:b.payment_status==='paid'});
  app.get('/api/stays/bookings',async(req,res)=>{try{res.set('Cache-Control','no-store');const user=await getCurrentUser(req);if(!user)return res.json({data:[],signed_in:false});res.json({data:(await pool.query(bookingSelect+' WHERE b.user_id=$1 ORDER BY b.created_at DESC LIMIT 50',[user.id])).rows.map(present),signed_in:true});}catch(e){send(res,e);}});
  app.get('/api/stays/booking/:code',async(req,res)=>{try{res.set('Cache-Control','no-store');if(!/^AQH-[A-Z0-9]{6,36}$/.test(req.params.code))throw error(404,'الحجز غير موجود');const b=(await pool.query(bookingSelect+' WHERE b.booking_code=$1',[req.params.code])).rows[0];if(!b)throw error(404,'الحجز غير موجود');res.json({data:present(b)});}catch(e){send(res,e);}});
  app.post('/api/stays/booking/:code/cancel',async(req,res)=>{
+  if(bookingApproval){try{const result=await bookingApproval.cancelGuest(req.params.code,req.body?.reason);return res.json({...result,data:present(result.data)});}catch(e){return send(res,e);}}
   let client,transaction=false;
   try{
    client=await pool.connect();await client.query('BEGIN');transaction=true;

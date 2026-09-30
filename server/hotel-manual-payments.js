@@ -78,7 +78,7 @@ async function referenceUnused(db, reference, paymentId) {
   const wallet=(await db.query("SELECT id FROM payments WHERE provider='shamcash' AND provider_payment_id=$1",[reference])).rows[0];
   if (other || wallet) fail(409,'رقم التحويل مستخدم في طلب آخر.');
 }
-function register(app,{pool,requireAdmin,receiveQr,syncHotel=async()=>{}}) {
+function register(app,{pool,requireAdmin,receiveQr,syncHotel=async()=>{},bookingApproval}) {
   app.get('/api/admin/shamcash-manual/settings',requireAdmin,async(req,res)=>{try{res.set('Cache-Control','no-store');res.json({data:await settings(pool)});}catch(e){sendError(res,e);}});
   app.put('/api/admin/shamcash-manual/settings',requireAdmin,sameOrigin,async(req,res)=>{
     let db;
@@ -132,7 +132,7 @@ function register(app,{pool,requireAdmin,receiveQr,syncHotel=async()=>{}}) {
       if(action==='approve' && b.received_confirmed!==true) fail(400,'أكد مراجعة محفظة شام كاش واستلام المبلغ والعملة على الحساب المحدد.');
       if(action==='reject' && !note) fail(400,'اكتب سبب رفض التحويل.');
       db=await pool.connect();await db.query('BEGIN');
-      const p=(await db.query(`SELECT p.*,b.hotel_id,b.status booking_status,b.payment_status FROM hotel_manual_payments p JOIN hotel_bookings b ON b.id=p.booking_id WHERE p.id=$1 FOR UPDATE OF b,p`,[req.params.id])).rows[0];
+      const p=(await db.query(`SELECT p.*,b.hotel_id,b.approval_status,b.status booking_status,b.payment_status FROM hotel_manual_payments p JOIN hotel_bookings b ON b.id=p.booking_id WHERE p.id=$1 FOR UPDATE OF b,p`,[req.params.id])).rows[0];
       if(!p) fail(404,'التحويل غير موجود.');
       const next=action==='approve'?'approved':'rejected';
       if(p.status===next){await db.query('COMMIT');return res.json({ok:true,status:next,repeated:true});}
@@ -141,10 +141,11 @@ function register(app,{pool,requireAdmin,receiveQr,syncHotel=async()=>{}}) {
       if(!['awaiting_transfer','pending_review'].includes(p.status)) fail(409,'تمت مراجعة هذه الدفعة سابقًا.');
       if(action==='approve') await referenceUnused(db,p.transaction_reference,p.id);
       await db.query('UPDATE hotel_manual_payments SET status=$2,reviewed_by=$3,reviewed_at=NOW(),review_note=$4 WHERE id=$1',[p.id,next,req.user.id,note||null]);
-      await db.query("UPDATE hotel_bookings SET status=$2,payment_status=$3,updated_at=NOW() WHERE id=$1",[p.booking_id,action==='approve'?'confirmed':'cancelled',action==='approve'?'paid':'pending']);
+      await db.query("UPDATE hotel_bookings SET status=$2,payment_status=$3,updated_at=NOW() WHERE id=$1",[p.booking_id,action==='approve'?(p.approval_status==='pending'?'pending':'confirmed'):'cancelled',action==='approve'?'paid':'pending']);
       await db.query('UPDATE hotel_invoices SET status=$2 WHERE booking_id=$1',[p.booking_id,action==='approve'?'paid':'cancelled']);
       await db.query('INSERT INTO hotel_booking_events(booking_id,event_type,note,actor_user_id) VALUES($1,$2,$3,$4)',[p.booking_id,'manual_payment_'+next,action==='approve'?'أكد المدير وصول تحويل شام كاش':note,req.user.id]);
-      await db.query('COMMIT');res.json({ok:true,status:next});
+      if(bookingApproval){const updated=(await db.query('SELECT * FROM hotel_bookings WHERE id=$1',[p.booking_id])).rows[0];await bookingApproval.enqueue(db,updated,action==='approve'?'payment_confirmed':'cancelled');}
+      await db.query('COMMIT');bookingApproval?.wake();res.json({ok:true,status:next});
       Promise.resolve().then(()=>syncHotel(pool,p.hotel_id)).catch(e=>console.error('Manual hotel availability sync:',e.message));
     }catch(e){if(db)await db.query('ROLLBACK');sendError(res,e);}finally{db?.release();}
   });

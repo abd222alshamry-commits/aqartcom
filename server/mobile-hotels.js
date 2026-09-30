@@ -32,15 +32,15 @@ async function quote(db, s, lock = false) {
   const price=await inventory.priceStay(db,hotel,room,s);
   const terms=stayPolicy.snapshot(hotel);
   const deadline=(await db.query("SELECT (($1::date+$2::time) AT TIME ZONE 'Asia/Damascus')-($3::int*INTERVAL '1 hour') deadline",[s.checkIn,terms.check_in_time,terms.free_cancel_hours])).rows[0].deadline;
-  return { hotel, room, public: { ...price, cancellation_deadline:deadline, children:s.children||0, nights: s.nights, rooms_count: s.rooms, adults: s.adults, check_in: s.checkIn, check_out: s.checkOut, hotel_id: s.hotelId, room_id: s.roomId, hotel_name: hotel.name, room_name: room.name, payment_method: 'pay_at_hotel', cancellation_policy: stayPolicy.description(hotel), stay_terms:stayPolicy.snapshot(hotel), terms_version:Number(hotel.terms_version||1), booking_api: 1 } };
+  return { hotel, room, public: { ...price, cancellation_deadline:deadline, children:s.children||0, nights: s.nights, rooms_count: s.rooms, adults: s.adults, check_in: s.checkIn, check_out: s.checkOut, hotel_id: s.hotelId, room_id: s.roomId, hotel_name: hotel.name, room_name: room.name, payment_method: 'pay_at_hotel', cancellation_policy: stayPolicy.description(hotel), stay_terms:stayPolicy.snapshot(hotel), terms_version:Number(hotel.terms_version||1), requires_hotel_confirmation:true, booking_api: 1 } };
 }
 function sendError(res, error) { if (!error.status) console.error('Mobile hotel request failed:', error.message); return res.status(error.status || 500).json({ error: error.status ? error.message : 'تعذر إكمال طلب الفندق' }); }
 function receipt(row, hotelName, roomName) {
-  const keys = ['booking_code', 'hotel_id', 'room_id', 'check_in', 'check_out', 'nights', 'rooms_count', 'adults', 'children', 'total', 'currency', 'status', 'payment_method', 'payment_status', 'cancellation_deadline','stay_terms_snapshot','price_breakdown','subtotal'];
+  const keys = ['booking_code', 'hotel_id', 'room_id', 'check_in', 'check_out', 'nights', 'rooms_count', 'adults', 'children', 'total', 'currency', 'status', 'payment_method', 'payment_status', 'cancellation_deadline','stay_terms_snapshot','price_breakdown','subtotal','approval_status','approval_note','decided_at'];
   return { ...Object.fromEntries(keys.map(key => [key, row[key]])), hotel_name: hotelName, room_name: roomName };
 }
-function register(app, { pool, getCurrentUser, syncHotel, manualPayments }) {
-  require('./stay-experience').register(app,{pool,getCurrentUser,syncHotel,stay,quote,receipt});
+function register(app, { pool, getCurrentUser, syncHotel, manualPayments, bookingApproval }) {
+  require('./stay-experience').register(app,{pool,getCurrentUser,syncHotel,stay,quote,receipt,bookingApproval});
   app.get('/api/mobile/hotels/quote', async (req, res) => {
     try { res.set('Cache-Control', 'no-store'); const q=await quote(pool,stay(req.query)); const payment_methods=manualPayments?await manualPayments.options(pool,q):[{id:'pay_at_hotel',name:'الدفع عند الوصول',available:true}]; res.json({data:{...q.public,payment_methods}}); }
     catch (e) { sendError(res, e); }
@@ -77,14 +77,16 @@ function register(app, { pool, getCurrentUser, syncHotel, manualPayments }) {
       const code = 'AQH-' + crypto.randomBytes(9).toString('hex').toUpperCase();
       const commission = Number((q.public.total * Number(q.hotel.platform_commission_rate || 0) / 100).toFixed(2));
       const result = await client.query(`INSERT INTO hotel_bookings
-        (booking_code,hotel_id,room_id,user_id,guest_name,guest_email,guest_phone,check_in,check_out,adults,children,rooms_count,nights,unit_price,subtotal,total,currency,payment_method,payment_status,status,cancellation_deadline,special_requests,commission_amount,net_amount,idempotency_key,request_hash,stay_terms_snapshot,price_breakdown)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$27,$11,$12,$13,$14,$15,$16,$22,'pending',$23,(($8::date+$24::time) AT TIME ZONE 'Asia/Damascus')-($25::int*INTERVAL '1 hour'),$17,$18,$19,$20,$21,$26::jsonb,$28::jsonb) RETURNING *`,
-        [code,s.hotelId,s.roomId,user?.id || null,g.name,g.email || null,g.phone,s.checkIn,s.checkOut,s.adults,s.rooms,s.nights,q.public.unit_price,q.public.subtotal,q.public.total,currency,g.requests || null,commission,Number((q.public.total - commission).toFixed(2)),key,fingerprint,method,prepared?'pending':'confirmed',stayPolicy.snapshot(q.hotel).check_in_time,stayPolicy.snapshot(q.hotel).free_cancel_hours,JSON.stringify(stayPolicy.snapshot(q.hotel)),s.children||0,JSON.stringify(q.public.nightly)]);
+        (booking_code,hotel_id,room_id,user_id,guest_name,guest_email,guest_phone,check_in,check_out,adults,children,rooms_count,nights,unit_price,subtotal,total,currency,payment_method,payment_status,status,cancellation_deadline,special_requests,commission_amount,net_amount,idempotency_key,request_hash,stay_terms_snapshot,price_breakdown,approval_status)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$27,$11,$12,$13,$14,$15,$16,$22,'pending',$23,(($8::date+$24::time) AT TIME ZONE 'Asia/Damascus')-($25::int*INTERVAL '1 hour'),$17,$18,$19,$20,$21,$26::jsonb,$28::jsonb,'pending') RETURNING *`,
+        [code,s.hotelId,s.roomId,user?.id || null,g.name,g.email || null,g.phone,s.checkIn,s.checkOut,s.adults,s.rooms,s.nights,q.public.unit_price,q.public.subtotal,q.public.total,currency,g.requests || null,commission,Number((q.public.total - commission).toFixed(2)),key,fingerprint,method,'pending',stayPolicy.snapshot(q.hotel).check_in_time,stayPolicy.snapshot(q.hotel).free_cancel_hours,JSON.stringify(stayPolicy.snapshot(q.hotel)),s.children||0,JSON.stringify(q.public.nightly)]);
       const booking=result.rows[0];
       const manual_payment=prepared?await manualPayments.create(client,booking,prepared):undefined;
       await client.query("INSERT INTO hotel_booking_events(booking_id,event_type,note,actor_user_id) VALUES($1,'created','تم إنشاء الحجز من التطبيق',$2)", [booking.id,user?.id || null]);
       await client.query('INSERT INTO hotel_invoices(booking_id,invoice_number,gross_amount,commission_amount,net_amount,currency) VALUES($1,$2,$3,$4,$5,$6)', [booking.id,'AQHINV-' + crypto.randomBytes(10).toString('hex').toUpperCase(),q.public.total,commission,booking.net_amount,currency]);
+      if(bookingApproval)await bookingApproval.enqueue(client,booking,'requested');
       await client.query('COMMIT'); inTransaction = false;
+      bookingApproval?.wake();
       res.status(201).json({data:receipt(booking,q.hotel.name,q.room.name),manual_payment});
       Promise.resolve().then(() => syncHotel(pool,s.hotelId)).catch(e => console.error('OTA mobile booking sync:',e.message));
     } catch (e) { if (inTransaction) await client.query('ROLLBACK').catch(() => {}); sendError(res,e); }

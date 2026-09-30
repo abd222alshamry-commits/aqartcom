@@ -16,7 +16,8 @@ async function setup(t){
  const officeRoutes=source.split('\n').filter(line=>/^app\.(get|post|patch)\('\/api\/office\/(hotels(?:'|\/:id(?:'|\/rooms'|\/bookings'))|hotel-rooms\/:id'|hotel-bookings\/:id')/.test(line)).join('\n');
  const access=new Function('require','app','pool','getCurrentUser','getOfficeForUser',middleware+helpers+publicRoutes+officeRoutes+';return {requireOfficeMember,ownedHotel};')(require('node:module').createRequire(path.join(__dirname,'../server/server.js')),app,pool,getCurrentUser,async()=>null);
  require('../server/host-portal').register(app,{pool,requireAuth,...access});
- require('../server/mobile-hotels').register(app,{pool,getCurrentUser,syncHotel:async()=>{}});
+ const bookingApproval=require('../server/hotel-booking-approval').createService({pool});bookingApproval.register(app,access);
+ require('../server/mobile-hotels').register(app,{pool,getCurrentUser,syncHotel:async()=>{},bookingApproval});
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'host-uploads-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  require('../server/hotel-media').register(app,{pool,...access,uploadDir:dir,createVideoPoster:async()=>{throw Error('not used in image tests');}});
  for(const endpoint of ['/api/office/hotels/:id/commission','/api/office/hotels/:id/payments/entries','/api/office/other'])app.post(endpoint,access.requireOfficeMember,(req,res)=>res.json({ok:true}));
@@ -78,8 +79,8 @@ test('booking preserves accepted policy and calculates cancellation from Damascu
  await call(settingsUrl,'host','PATCH',{...settings,terms_version:2,rental_terms:'شروط أحدث',free_cancel_hours:72});
  const repeat=await call('/api/mobile/hotels/book','guest','POST',body);assert.equal(repeat.status,200);assert.equal(repeat.json.data.stay_terms_snapshot.version,2);
  const saved=(await db.query('SELECT * FROM hotel_bookings WHERE booking_code=$1',[booking.json.data.booking_code])).rows[0];assert.equal(saved.stay_terms_snapshot.rental_terms,settings.rental_terms);
- assert.equal((await call(`/api/office/hotel-bookings/${saved.id}`,'host','PATCH',{status:'confirmed'})).status,403);
- assert.equal((await call(`/api/office/hotel-bookings/${saved.id}`,'host','PATCH',{status:'completed'})).status,404); // A future stay cannot be completed early.
+ assert.equal((await call(`/api/office/hotel-bookings/${saved.id}`,'host','PATCH',{status:'confirmed'})).status,200);
+ assert.equal((await call(`/api/office/hotel-bookings/${saved.id}`,'host','PATCH',{status:'completed'})).status,409); // A future stay cannot be completed early.
  assert.equal((await call(`/api/office/hotel-bookings/${saved.id}`,'host','PATCH',{status:'cancelled'})).status,200);
 });
 

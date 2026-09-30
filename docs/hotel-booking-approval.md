@@ -1,0 +1,17 @@
+# Hotel approval and booking notifications
+
+New bookings from the website, Android and legacy `/api/hotels/book` start with `status=pending` and `approval_status=pending`. Existing bookings and OTA imports keep their prior workflow through `approval_status=not_required`.
+
+The hotel owner or authorized office member accepts or rejects requests in **Hotel management → Bookings**. A rejection requires a reason. The existing office middleware still enforces ownership and restricted-admin permissions. Repeated decisions are idempotent; terminal bookings cannot be reopened. Pending requests count toward occupied inventory; rejection or cancellation releases inventory. A guest may withdraw a request awaiting hotel approval even after the normal free-cancellation deadline.
+
+Payment is independent: a pay-at-hotel request is confirmed on hotel acceptance. A ShamCash request needs both hotel acceptance and finance approval, in either order. Cancellation never automatically refunds money or changes an already-paid invoice.
+
+Notifications are persisted in the same database transaction as creation/decision. A failed notification insert rolls the transaction back. In-app notifications are delivered to the owner and authorized office managers. The manager email defaults to the hotel owner's email (office owner when needed); an authorized manager can specify `booking_email` from the Bookings tab. This address is excluded from public hotel responses.
+
+Email configuration uses existing server secrets: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, optional `SMTP_FROM`, and `APP_URL`. Never put credentials in the repository or Android client. The Bookings tab displays whether these settings exist; configuration alone does not prove delivery. If absent, mail stays queued while in-app requests continue to work. The server logs only a readiness boolean at startup.
+
+A durable outbox retries delivery with exponential delays (up to 8 attempts), recovers jobs interrupted for 10 minutes and skips superseded requests. SMTP is at-least-once delivery: a crash after provider acceptance and before database acknowledgement can duplicate an email. Stable Message-ID and idempotent decisions limit the impact. Existing VAPID configuration optionally delivers subscribed browser alerts.
+
+Android 1.9 adds a bell and opens `/notifications.html`. Phone notifications are opt-in and need Android permission. They are checked every 30 seconds on a visible native screen and through WorkManager at a minimum 15-minute interval in the background, subject to network and battery restrictions. These are periodic alerts, not real-time FCM push. Account-specific deduplication prevents repeatedly alerting on the same message; notification contents are private on the lock screen.
+
+Validation: local SQL/HTTP and DOM tests cover pending creation, request retry without duplicate booking or notification, owner scope, refusal reasons, terminal-state protection, both payment-order cases, email retry, SQL rollback, guest withdrawal, manager controls and the guest checkout/recovery flow. No test email or test booking is sent to production by these tests.

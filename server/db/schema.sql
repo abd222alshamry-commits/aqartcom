@@ -1342,3 +1342,30 @@ DROP TRIGGER IF EXISTS property_image_cover_cleanup ON property_images;
 CREATE TRIGGER property_image_cover_cleanup AFTER DELETE ON property_images FOR EACH ROW EXECUTE FUNCTION clear_deleted_property_cover();
 DROP TRIGGER IF EXISTS property_video_cover_cleanup ON property_videos;
 CREATE TRIGGER property_video_cover_cleanup AFTER DELETE ON property_videos FOR EACH ROW EXECUTE FUNCTION clear_deleted_property_cover();
+
+-- Hotel approval is separate from payment. Existing and imported bookings retain their status.
+ALTER TABLE hotels ADD COLUMN IF NOT EXISTS booking_email VARCHAR(220);
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS approval_status VARCHAR(20) NOT NULL DEFAULT 'not_required' CHECK(approval_status IN ('not_required','pending','approved','rejected'));
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS approved_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ;
+ALTER TABLE hotel_bookings ADD COLUMN IF NOT EXISTS approval_note TEXT;
+ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS hotel_booking_id BIGINT REFERENCES hotel_bookings(id) ON DELETE CASCADE;
+ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS action_url TEXT;
+ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS event_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_event_user ON user_notifications(event_key,user_id);
+CREATE TABLE IF NOT EXISTS hotel_notification_outbox (
+ id BIGSERIAL PRIMARY KEY,
+ booking_id BIGINT NOT NULL REFERENCES hotel_bookings(id) ON DELETE CASCADE,
+ event_key TEXT NOT NULL,
+ channel VARCHAR(10) NOT NULL CHECK(channel IN ('email','push')),
+ recipient TEXT NOT NULL,
+ user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+ title TEXT NOT NULL, body TEXT NOT NULL, action_url TEXT NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','sending','sent','failed','superseded')),
+ attempts INTEGER NOT NULL DEFAULT 0,
+ next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), locked_at TIMESTAMPTZ, sent_at TIMESTAMPTZ,
+ last_error TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ UNIQUE(event_key,channel,recipient)
+);
+CREATE INDEX IF NOT EXISTS idx_hotel_notification_queue ON hotel_notification_outbox(status,next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_hotel_approval_pending ON hotel_bookings(hotel_id,approval_status) WHERE status='pending';

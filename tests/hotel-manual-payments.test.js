@@ -54,7 +54,17 @@ test('manual hotel transfers stay unpaid until authorized review, with private r
   assert.equal((await submit(body2,booked2.data.booking_code,'123456')).status,409);
   assert.equal((await review(paymentId,'approve')).ok,true);
   assert.equal((await review(paymentId,'approve')).repeated,true);
-  let state=(await db.query('SELECT status,payment_status FROM hotel_bookings WHERE booking_code=$1',[booked.data.booking_code])).rows[0];assert.deepEqual(state,{status:'confirmed',payment_status:'paid'});
+  let state=(await db.query('SELECT status,payment_status FROM hotel_bookings WHERE booking_code=$1',[booked.data.booking_code])).rows[0];assert.deepEqual(state,{status:'pending',payment_status:'paid'});
+  const approval=require('../server/hotel-booking-approval').createService({pool});
+  const approvedBooking=(await db.query('SELECT * FROM hotel_bookings WHERE booking_code=$1',[booked.data.booking_code])).rows[0];
+  const accept=id=>approval.decide({body:{status:'confirmed'},params:{id},user:{id:admin},office:{id:null,owner_id:admin,platform_admin:true}});
+  assert.equal((await accept(approvedBooking.id)).data.status,'confirmed');
+  const beforePayment=makeBody(),beforeBooked=await book(beforePayment);const beforeId=(await db.query('SELECT id FROM hotel_bookings WHERE booking_code=$1',[beforeBooked.data.booking_code])).rows[0].id;
+  assert.equal((await accept(beforeId)).data.status,'pending');
+  assert.equal((await submit(beforePayment,beforeBooked.data.booking_code,'999991')).status,200);
+  const beforePid=(await db.query('SELECT id FROM hotel_manual_payments WHERE booking_id=$1',[beforeId])).rows[0].id;
+  assert.equal((await review(beforePid,'approve')).status,200);
+  assert.deepEqual((await db.query('SELECT status,payment_status FROM hotel_bookings WHERE id=$1',[beforeId])).rows[0],{status:'confirmed',payment_status:'paid'});
   assert.equal((await db.query("SELECT COUNT(*)::int n FROM hotel_booking_events WHERE booking_id=(SELECT id FROM hotel_bookings WHERE booking_code=$1) AND event_type='manual_payment_approved'",[booked.data.booking_code])).rows[0].n,1);
   assert.equal((await db.query("SELECT COUNT(*)::int n FROM wallet_transactions")).rows[0].n,0);
   assert.equal((await request(route,{token:body.payment_access_token})).data.status,'approved');

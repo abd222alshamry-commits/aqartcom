@@ -29,7 +29,7 @@ test('search, availability and confirmation agree on nightly prices, discounts a
  assert.equal((await call('/api/mobile/hotels/quote?'+new URLSearchParams({...fields,children:2}))).status,409);
  const b={...fields,guest_name:'Test Guest',guest_phone:'+963900000000',payment_method:'pay_at_hotel',expected_total:370,expected_currency:'USD',expected_terms_version:1,booking_flow:2,accept_stay_terms:true,idempotency_key:crypto.randomUUID()};
  assert.equal((await call('/api/mobile/hotels/book',{...b,accept_stay_terms:'yes'})).status,400);
- const booked=await call('/api/mobile/hotels/book',b);assert.equal(booked.status,201,JSON.stringify(booked));assert.equal(booked.json.data.children,1);assert.equal(booked.json.data.status,'confirmed');assert.equal(booked.json.data.payment_status,'pending');
+ const booked=await call('/api/mobile/hotels/book',b);assert.equal(booked.status,201,JSON.stringify(booked));assert.equal(booked.json.data.children,1);assert.equal(booked.json.data.status,'pending');assert.equal(booked.json.data.payment_status,'pending');
  assert.deepEqual(booked.json.data.price_breakdown.map(n=>n.total),[100,150,120]);
  const repeated=await call('/api/mobile/hotels/book',b);assert.equal(repeated.json.data.booking_code,booked.json.data.booking_code);assert.equal(repeated.json.repeated,true);
  assert.equal((await call('/api/mobile/hotels/book',{...b,idempotency_key:crypto.randomUUID()})).status,409);assert.equal((await call('/api/stays/search?'+search)).json.data.length,0);
@@ -77,7 +77,7 @@ test('real website journey selects a chalet, reviews, recovers a lost confirmati
  const persisted=w.sessionStorage.getItem('aq-stay-pending');assert.ok(persisted);
  const old=w;({w}=browser());w.sessionStorage.setItem('aq-stay-pending',persisted);old.close();await w.showMyBookings();w.document.getElementById('resumeStay').click();w.document.getElementById('retryBooking').click();await until(()=>w.document.querySelector('.receipt-code'));
  assert.equal(w.sessionStorage.getItem('aq-stay-pending'),null);assert.equal((await db.query('SELECT COUNT(*)::int n FROM hotel_bookings')).rows[0].n,1);
- const posts=calls.filter(c=>c.url==='/api/mobile/hotels/book');assert.equal(posts.length,2);assert.equal(posts[0].body,posts[1].body);assert.match(w.document.querySelector('.receipt-header').textContent,/حجزك مؤكد/);
+ const posts=calls.filter(c=>c.url==='/api/mobile/hotels/book');assert.equal(posts.length,2);assert.equal(posts[0].body,posts[1].body);assert.match(w.document.querySelector('.receipt-header').textContent,/طلبك بانتظار تأكيد الفندق/);
  const code=w.document.querySelector('.receipt-code').textContent;await w.showMyBookings();assert.match(w.document.getElementById('bookingList').textContent,new RegExp(code));w.document.querySelector('[data-booking-index]').click();await until(()=>w.document.getElementById('cancelBooking'));
  w.document.getElementById('cancelBooking').click();w.document.querySelector('#cancelForm [type=submit]').click();await until(()=>w.document.querySelector('.receipt-header')?.textContent.includes('تم إلغاء الحجز'));
  assert.equal((await db.query('SELECT status FROM hotel_bookings WHERE room_id=$1',[room.id])).rows[0].status,'cancelled');assert.equal(w.document.getElementById('cancelBooking'),null);assert.deepEqual(errors,[]);
