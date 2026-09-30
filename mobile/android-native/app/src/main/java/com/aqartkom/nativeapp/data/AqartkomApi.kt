@@ -104,6 +104,10 @@ class AqartkomApi(context: Context) {
         hotelParser.cancelledReceipt(receipt, response)
     }
 
+    suspend fun notifications(): JSONObject = withContext(Dispatchers.IO) {
+        executeJson(Request.Builder().url("$origin/api/me/notifications").header("Cache-Control", "no-cache").get().build())
+    }
+
     suspend fun hotelManagement(admin: Boolean): JSONObject = withContext(Dispatchers.IO) {
         val path = if (admin) "/api/admin/hotels/executive-dashboard?days=30" else "/api/office/hotels"
         executeJson(Request.Builder().url(origin + path).header("Cache-Control", "no-cache").get().build())
@@ -160,7 +164,7 @@ class AqartkomApi(context: Context) {
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
-        try { executeJson(Request.Builder().url("$origin/api/auth/logout").post(ByteArray(0).toRequestBody()).build()) } finally { cookies.clear() }
+        try { executeJson(Request.Builder().url("$origin/api/auth/logout").post(ByteArray(0).toRequestBody()).build()) } finally { cookies.clear(); androidx.core.app.NotificationManagerCompat.from(appContext).cancelAll() }
     }
 
     suspend fun favorites(): Set<String> = withContext(Dispatchers.IO) {

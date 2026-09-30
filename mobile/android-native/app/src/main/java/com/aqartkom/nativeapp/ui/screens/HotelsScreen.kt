@@ -257,7 +257,7 @@ fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?, onAccount
     var copied by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Icon(if (r.status == "confirmed") Icons.Default.CheckCircle else Icons.Default.Info, null, Modifier.size(58.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(if (r.status == "confirmed") "الحجز مؤكد" else when (r.status) { "cancelled" -> "الحجز ملغى"; "pending" -> "الحجز قيد الانتظار"; "completed" -> "الإقامة مكتملة"; "no_show" -> "عدم حضور"; else -> "حالة الحجز: ${r.status}" }, style = MaterialTheme.typography.headlineSmall)
+        Text(if (r.status == "confirmed") "الحجز مؤكد" else when (r.status) { "cancelled" -> "الحجز ملغى"; "pending" -> "بانتظار تأكيد الفندق"; "completed" -> "الإقامة مكتملة"; "no_show" -> "عدم حضور"; else -> "حالة الحجز: ${r.status}" }, style = MaterialTheme.typography.headlineSmall)
         Text(r.hotel, style = MaterialTheme.typography.titleLarge); Text(r.room)
         Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(18.dp)) { Text(r.code, Modifier.padding(18.dp), style = MaterialTheme.typography.titleMedium) }
         OutlinedButton({ clipboard.setText(AnnotatedString(r.code)); copied = true }) { Icon(Icons.Default.ContentCopy, null); Spacer(Modifier.width(7.dp)); Text(if (copied) "تم نسخ الرقم" else "نسخ رقم الحجز") }

@@ -13,8 +13,8 @@ android {
         applicationId = "com.aqartkom.mobileapp.v2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 180
-        versionName = "1.8.0"
+        versionCode = 190
+        versionName = "1.9.0"
         buildConfigField("String", "API_ORIGIN", "\"https://aqartcom-v93.onrender.com\"")
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -45,6 +45,7 @@ android {
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.04.01"))
     implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")

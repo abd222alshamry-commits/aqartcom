@@ -27,7 +27,7 @@ import com.aqartkom.nativeapp.R
 import com.aqartkom.nativeapp.ui.*
 
 @Composable
-fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () -> Unit, onAccount: () -> Unit, onServices: () -> Unit, onSol: () -> Unit, darkMode: Boolean, onDarkMode: () -> Unit, onStayDestination: (String) -> Unit = { onHotels() }) {
+fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () -> Unit, onAccount: () -> Unit, onServices: () -> Unit, onSol: () -> Unit, darkMode: Boolean, onDarkMode: () -> Unit, onStayDestination: (String) -> Unit = { onHotels() }, onNotifications: () -> Unit = {}, unreadNotifications: Int = 0) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(300.dp),
@@ -43,6 +43,7 @@ fun SectionsScreen(modifier: Modifier, onProperties: () -> Unit, onHotels: () ->
                         Text("عقارتكم", style = MaterialTheme.typography.titleLarge)
                         Text("عقار وإقامة في سوريا", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    IconButton(onNotifications) { BadgedBox(badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }) { Icon(Icons.Default.NotificationsNone, "الإشعارات") } }
                     IconButton(onDarkMode) { Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "تغيير المظهر") }
                     FilledTonalIconButton(onAccount) { Icon(Icons.Default.PersonOutline, "حسابي") }
                 }
