@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.aqartkom.nativeapp.AppViewModel
 import com.aqartkom.nativeapp.HotelsViewModel
 import com.aqartkom.nativeapp.data.*
@@ -45,6 +46,8 @@ private enum class Destination(val label: String, val icon: ImageVector) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -> Unit) {
+    var showNotifications by rememberSaveable { mutableStateOf(false) }
+    var unreadNotifications by remember { mutableIntStateOf(0) }
     val hotelsViewModel: HotelsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     var destination by rememberSaveable { mutableStateOf(Destination.Sections) }
     var coverId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -76,6 +79,29 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
             siteLauncher.launch(Intent(context, SiteActivity::class.java).putExtra("path", path))
         } catch (_: Exception) { viewModel.showMessage("تعذر فتح الخدمة؛ أعد المحاولة") }
     } }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(user?.id, lifecycleOwner) {
+        unreadNotifications = 0
+        if (user == null) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                try {
+                    val result = (context.applicationContext as AqartkomApplication).api.notifications()
+                    if (result.optLong("user_id") == user?.id) {
+                        unreadNotifications = result.optInt("unread")
+                        BookingNotifications.show(context, result)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { }
+                kotlinx.coroutines.delay(30000)
+            }
+        }
+    }
+    if (showNotifications) {
+        BackHandler { showNotifications = false }
+        BookingNotificationsScreen(onBack = { showNotifications = false }, openInbox = { openSite("/notifications.html") })
+        return
+    }
     fun searchFor(filters: SearchFilters) { focus.clearFocus(); viewModel.refresh(filters); destination = Destination.Search; collection = null }
     fun showMap(fromSearch: Boolean) { focus.clearFocus(); mapProperty = null; mapFromSearch = fromSearch; destination = Destination.Map }
     fun goHome() { collection = null; mapProperty = null; destination = Destination.Home }
@@ -136,6 +162,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
         if (destination != Destination.Sections) Surface {
             Row(Modifier.fillMaxWidth().statusBarsPadding().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton({ showNotifications = true }) { BadgedBox(badge = { if (unreadNotifications > 0) Badge { Text(unreadNotifications.toString()) } }) { Icon(Icons.Default.NotificationsNone, "الإشعارات") } }
                 IconButton({ destination = Destination.Sections }) { Icon(Icons.Default.Apps, "اختيار القسم") }
                 FilterChip(selected = destination in listOf(Destination.Home, Destination.Search, Destination.Add, Destination.Map), onClick = { destination = Destination.Home }, label = { Text("العقارات") })
                 FilterChip(selected = destination == Destination.Hotels, onClick = { openSite("/hotels.html") }, label = { Text("الفنادق والحجوزات") })
@@ -176,7 +203,7 @@ fun AqartkomApp(viewModel: AppViewModel, darkMode: Boolean, toggleDarkMode: () -
         AnimatedContent(targetState = destination, transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(100)) }, label = "main-navigation") { page ->
             pageState.SaveableStateProvider(page.name) {
                 when (page) {
-                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { openSite("/hotels.html") }, { destination = Destination.Account }, { destination = Destination.Services }, { openSite("/sol.html") }, darkMode, toggleDarkMode, ::openSite)
+                    Destination.Sections -> SectionsScreen(Modifier.padding(padding), { destination = Destination.Home }, { openSite("/hotels.html") }, { destination = Destination.Account }, { destination = Destination.Services }, { openSite("/sol.html") }, darkMode, toggleDarkMode, ::openSite, { showNotifications = true }, unreadNotifications)
                     Destination.Services -> ServicesScreen(Modifier.padding(padding), user, ::openSite) { hotelsViewModel.history(); destination = Destination.Hotels }
                     Destination.Home -> HomeScreen(Modifier.padding(padding), home, favorites, compared.map { it.id }.toSet(), darkMode, toggleDarkMode,
                         { collection = CollectionPage.Favorites }, viewModel::openProperty, viewModel::toggleFavorite, viewModel::toggleCompare,

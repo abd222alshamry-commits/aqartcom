@@ -34,7 +34,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aqartkom-1.8.0-release-verification
+          name: aqartkom-1.9.0-release-verification
           path: |
             mobile/android-native/app/build/outputs/apk/release/*.apk
             mobile/android-native/app/build/outputs/interface-previews/
