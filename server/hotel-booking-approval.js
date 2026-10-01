@@ -96,7 +96,10 @@ function createService({pool,sendEmail,sendPush,emailReady=()=>false,pushReady=(
  }
  return {enqueue,drain,wake,decide,cancelGuest,register,start(){
   console.log('Hotel booking email configured:',emailReady());
-  if(emailReady())require('./smtp-diagnostics').verifySmtp().catch(()=>console.error('Hotel booking SMTP verification: unavailable'));
+  if(emailReady()){
+   const diagnostics=require('./smtp-diagnostics');
+   diagnostics.verifySmtp().then(result=>result.verified?diagnostics.sendSmtpTest():undefined).catch(()=>console.error('Hotel booking SMTP verification: unavailable'));
+  }
   const timer=setInterval(wake,30000);timer.unref();wake();return timer;
  }};
 }
