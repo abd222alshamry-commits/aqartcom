@@ -94,6 +94,10 @@ function createService({pool,sendEmail,sendPush,emailReady=()=>false,pushReady=(
    await pool.query('UPDATE hotels SET booking_email=$2,updated_at=NOW() WHERE id=$1',[req.params.id,email||null]);res.json({ok:true});
   }catch(e){res.status(500).json({error:'تعذر حفظ بريد الفندق'});}});
  }
- return {enqueue,drain,wake,decide,cancelGuest,register,start(){console.log('Hotel booking email configured:',emailReady());const timer=setInterval(wake,30000);timer.unref();wake();return timer;}};
+ return {enqueue,drain,wake,decide,cancelGuest,register,start(){
+  console.log('Hotel booking email configured:',emailReady());
+  if(emailReady())require('./smtp-diagnostics').verifySmtp().catch(()=>console.error('Hotel booking SMTP verification: unavailable'));
+  const timer=setInterval(wake,30000);timer.unref();wake();return timer;
+ }};
 }
 module.exports={createService};
