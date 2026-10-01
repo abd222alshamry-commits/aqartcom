@@ -100,7 +100,11 @@ function createService({pool,sendEmail,sendPush,emailReady=()=>false,pushReady=(
   console.log('Hotel booking email configured:',emailReady());
   if(emailReady()){
    const diagnostics=require('./smtp-diagnostics');
-   diagnostics.verifySmtp().then(result=>result.verified?diagnostics.sendSmtpTest():undefined).catch(()=>console.error('Hotel booking SMTP verification: unavailable'));
+   diagnostics.verifySmtp().then(async result=>{
+    if(!result.verified)return;
+    await diagnostics.sendSmtpTest();
+    await require('./smtp-delivery-check').checkDelivery();
+   }).catch(()=>console.error('Hotel booking SMTP verification: unavailable'));
   }
   const timer=setInterval(wake,30000);timer.unref();wake();return timer;
  }};
