@@ -84,9 +84,11 @@ function createService({pool,sendEmail,sendPush,emailReady=()=>false,pushReady=(
   const sameOrigin=(req,res,next)=>{const origin=req.get('origin');if(origin&&origin!==`${req.protocol}://${req.get('host')}`&&origin!==process.env.APP_URL)return res.status(403).json({error:'مصدر الطلب غير مسموح'});next();};
   app.patch('/api/office/hotel-bookings/:id',requireOfficeMember,sameOrigin,async(req,res)=>{try{res.json(await decide(req));}catch(e){if(!e.status)console.error('Hotel decision:',e.message);res.status(e.status||500).json({error:e.status?e.message:'تعذر تحديث طلب الحجز'});}});
   app.get('/api/office/hotels/:id/booking-notifications',requireOfficeMember,async(req,res)=>{try{
+   res.set('Cache-Control','no-store');
    const h=await ownedHotel(req.params.id,req.office);if(!h)return res.status(404).json({error:'الفندق غير موجود'});
    const owner=(await pool.query('SELECT u.email FROM hotels h LEFT JOIN offices o ON o.id=h.office_id JOIN users u ON u.id=COALESCE(h.owner_id,o.owner_id) WHERE h.id=$1',[req.params.id])).rows[0];
-   res.json({email:h.booking_email||owner?.email||null,custom_email:h.booking_email||'',email_ready:emailReady(),pending:(await pool.query("SELECT COUNT(*)::int count FROM hotel_bookings WHERE hotel_id=$1 AND status='pending' AND approval_status='pending'",[req.params.id])).rows[0].count});
+   const deliveries=(await pool.query(`SELECT n.booking_id,n.status,n.recipient,n.sent_at,n.attempts,n.next_attempt_at FROM hotel_notification_outbox n JOIN hotel_bookings b ON b.id=n.booking_id WHERE b.hotel_id=$1 AND n.channel='email' AND n.event_key='hotel:'||b.id||':requested' ORDER BY b.created_at DESC,n.id DESC LIMIT 500`,[req.params.id])).rows;
+   res.json({email:h.booking_email||owner?.email||null,custom_email:h.booking_email||'',email_ready:emailReady(),email_connection:emailReady()?require('./smtp-diagnostics').getSmtpStatus():{verified:false,code:'NOT_CONFIGURED',checked_at:null},deliveries,pending:(await pool.query("SELECT COUNT(*)::int count FROM hotel_bookings WHERE hotel_id=$1 AND status='pending' AND approval_status='pending'",[req.params.id])).rows[0].count});
   }catch(e){res.status(500).json({error:'تعذر تحميل إعدادات الإشعارات'});}});
   app.put('/api/office/hotels/:id/booking-notifications',requireOfficeMember,sameOrigin,async(req,res)=>{try{
    if(!await ownedHotel(req.params.id,req.office))return res.status(404).json({error:'الفندق غير موجود'});

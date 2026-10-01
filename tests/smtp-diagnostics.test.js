@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {verifySmtp,sendSmtpTest}=require('../server/smtp-diagnostics');
+const {verifySmtp,sendSmtpTest,getSmtpStatus}=require('../server/smtp-diagnostics');
 const env={SMTP_HOST:'smtp.example.test',SMTP_USER:'sender@example.test',SMTP_PASS:'private-test-password'};
 
 test('SMTP check authenticates with TLS, closes connection and never sends mail',async()=>{
@@ -11,6 +11,7 @@ test('SMTP check authenticates with TLS, closes connection and never sends mail'
   return {verify:async()=>{verified++;},close:()=>{closed++;},sendMail:()=>assert.fail('diagnostics must not send mail')};
  }});
  assert.deepEqual(result,{verified:true});assert.equal(verified,1);assert.equal(closed,1);
+ const snapshot=getSmtpStatus();assert.equal(snapshot.verified,true);assert.ok(snapshot.checked_at);snapshot.verified=false;assert.equal(getSmtpStatus().verified,true);
  assert.ok(!JSON.stringify(logs).includes(env.SMTP_PASS));
 });
 
@@ -21,6 +22,7 @@ test('SMTP authentication failure reports only safe codes and never credentials 
   close:()=>{closed=true;}
  })});
  assert.deepEqual(result,{verified:false,code:'EAUTH',responseCode:535});assert.ok(closed);
+ assert.equal(getSmtpStatus().verified,false);assert.equal(getSmtpStatus().code,'EAUTH');
  assert.ok(!JSON.stringify(logs).includes(env.SMTP_PASS));assert.ok(!JSON.stringify(logs).includes(env.SMTP_USER));
 });
 

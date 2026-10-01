@@ -15,14 +15,25 @@ test('hotel approval, scoped decisions and durable notifications stay consistent
  const auth=(req,res,next)=>{const id=Number(req.get('x-user'));if(!id)return res.status(401).json({error:'auth'});req.user={id,role:'user'};req.office={id:null,owner_id:id};next();};
  const ownedHotel=async(id,office)=>(await db.query('SELECT * FROM hotels WHERE id=$1 AND owner_id=$2',[id,office.owner_id])).rows[0];service.register(app,{requireOfficeMember:auth,ownedHotel});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));const base='http://127.0.0.1:'+server.address().port;
- async function req(path,body,who,method='POST',origin){const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(who?{'x-user':who}:{}),...(origin?{Origin:origin}:{})},...(method!=='GET'?{body:JSON.stringify(body)}:{})});return {status:r.status,...await r.json()};}
+ async function req(path,body,who,method='POST',origin){const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(who?{'x-user':who}:{}),...(origin?{Origin:origin}:{})},...(method!=='GET'?{body:JSON.stringify(body)}:{})});return {status:r.status,cacheControl:r.headers.get('cache-control'),...await r.json()};}
  const make=()=>({hotel_id:h.id,room_id:room.id,check_in:'2099-10-01',check_out:'2099-10-03',adults:2,rooms_count:1,guest_name:'Guest',guest_phone:'12345678',guest_email:guest.email,expected_total:100,expected_currency:'USD',payment_method:'pay_at_hotel',idempotency_key:crypto.randomUUID()});
  const body=make(),first=await req('/api/mobile/hotels/book',body);assert.equal(first.status,201,JSON.stringify(first));assert.equal(first.data.status,'pending');assert.equal(first.data.approval_status,'pending');
  const booking=(await db.query('SELECT * FROM hotel_bookings WHERE booking_code=$1',[first.data.booking_code])).rows[0];
  let notices=(await db.query('SELECT * FROM user_notifications')).rows;assert.equal(notices.length,1);assert.equal(notices[0].user_id,owner.id);assert.equal(notices[0].action_url,`/hotel-partner.html?hotel=${h.id}&tab=bookings`);
  assert.equal((await req('/api/mobile/hotels/book',body)).repeated,true);assert.equal((await db.query('SELECT * FROM user_notifications')).rows.length,1);assert.equal((await db.query("SELECT * FROM hotel_notification_outbox WHERE channel='email'")).rows.length,1);
+ const deliverySettings=`/api/office/hotels/${h.id}/booking-notifications`;
+ assert.equal((await req(deliverySettings,null,null,'GET')).status,401);
+ assert.equal((await req(deliverySettings,null,other.id,'GET')).status,404);
+ let deliveryView=await req(deliverySettings,null,owner.id,'GET');
+ assert.equal(deliveryView.cacheControl,'no-store');assert.equal(deliveryView.deliveries.length,1);
+ assert.equal(deliveryView.deliveries[0].booking_id,booking.id);assert.equal(deliveryView.deliveries[0].status,'queued');
+ assert.equal(deliveryView.deliveries[0].recipient,owner.email);assert.equal(deliveryView.email_connection.code,'NOT_CONFIGURED');
+ const emptyHotel=(await db.query("INSERT INTO hotels(owner_id,name,slug,city,status) VALUES($1,'Other Hotel','delivery-empty','دمشق','active') RETURNING id",[owner.id])).rows[0];
+ assert.deepEqual((await req(`/api/office/hotels/${emptyHotel.id}/booking-notifications`,null,owner.id,'GET')).deliveries,[]);
  await service.drain();assert.equal(sent.length,0);ready=true;failEmail=true;await service.drain();let job=(await db.query("SELECT * FROM hotel_notification_outbox WHERE channel='email'")).rows[0];assert.equal(job.status,'queued');assert.equal(job.attempts,1);
+ deliveryView=await req(deliverySettings,null,owner.id,'GET');assert.equal(deliveryView.deliveries[0].attempts,1);assert.equal(deliveryView.deliveries[0].status,'queued');
  await db.query('UPDATE hotel_notification_outbox SET next_attempt_at=NOW()');failEmail=false;await service.drain();assert.equal(sent.length,1);assert.equal(sent[0].recipient,owner.email);await service.drain();assert.equal(sent.length,1);ready=false;
+ deliveryView=await req(deliverySettings,null,owner.id,'GET');assert.equal(deliveryView.deliveries[0].status,'sent');assert.ok(deliveryView.deliveries[0].sent_at);
  const decision='/api/office/hotel-bookings/'+booking.id;
  assert.equal((await req(decision,{status:'confirmed'},null,'PATCH')).status,401);
  assert.equal((await req(decision,{status:'confirmed'},other.id,'PATCH')).status,404);

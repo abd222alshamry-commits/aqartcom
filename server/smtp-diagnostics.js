@@ -1,4 +1,6 @@
 'use strict';
+let lastVerification={verified:null,checked_at:null};
+const getSmtpStatus=()=>({...lastVerification});
 
 function smtpOptions(env){
  const secure=String(env.SMTP_SECURE||'false')==='true';
@@ -16,6 +18,7 @@ function safeError(error){
 
 // Authenticate without sending a message. Never log credentials or provider text.
 async function verifySmtp({env=process.env,createTransport,log=console.log}={}){
+ lastVerification={verified:null,checked_at:null};
  let transport;
  let result;
  try{
@@ -32,6 +35,7 @@ async function verifySmtp({env=process.env,createTransport,log=console.log}={}){
  }finally{
   try{transport?.close();}catch(_error){}
  }
+ lastVerification={...result,checked_at:new Date().toISOString()};
  log('Hotel booking SMTP verification:',JSON.stringify(result));
  return result;
 }
@@ -73,4 +77,4 @@ async function sendSmtpTest({env=process.env,createTransport,log=console.log,sta
  return report(result);
 }
 
-module.exports={verifySmtp,sendSmtpTest};
+module.exports={verifySmtp,sendSmtpTest,getSmtpStatus};
