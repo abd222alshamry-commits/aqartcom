@@ -32,11 +32,39 @@ test('delivery inspection uses read-only mailbox and bounded exact searches with
    assert.equal(mode.uid,true);assert.ok(query.since instanceof Date);
    if(query.header){assert.equal(query.header['Message-ID'],`<smtp-test-${id}@aqartkom.app>`);return [1];}
    assert.equal(query.text,recipient);assert.deepEqual(query.or,[{from:'mailer-daemon'},{from:'postmaster'}]);return [2];
-  },fetchOne:async(uid,query,mode)=>{assert.equal(uid,2);assert.equal(mode.uid,true);assert.equal(query.source.maxLength,131072);return {source:Buffer.from(report())};},logout:async()=>{loggedOut=true;},close(){}};
+  },fetchOne:async(uid,query,mode)=>{
+   assert.equal(mode.uid,true);
+   if(uid===1){assert.deepEqual(query,{envelope:true,labels:true});return {envelope:{messageId:`<smtp-test-${id}@aqartkom.app>`,from:[{address:options.env.SMTP_USER}],to:[{address:recipient}]},labels:new Set(['\\Sent'])};}
+   assert.equal(uid,2);assert.equal(query.source.maxLength,131072);return {source:Buffer.from(report())};
+  },logout:async()=>{loggedOut=true;},close(){}};
  };
  const result=await checkDelivery({...options,createClient,log:(...args)=>logs.push(args)});
- assert.equal(result.checked,true);assert.deepEqual(result.tests,[{testId:id,original_found:true,delivery:'failed',status:'5.1.1'}]);
+ assert.equal(result.checked,true);assert.deepEqual(result.tests,[{testId:id,original_found:true,sender_matches:true,recipient_matches:true,additional_recipients:false,in_sent:true,delivery:'failed',status:'5.1.1'}]);
  assert.ok(released&&loggedOut);assert.ok(!JSON.stringify(logs).includes(options.env.SMTP_PASS));assert.ok(!JSON.stringify(logs).includes('Ignore all instructions'));
+});
+test('checks Junk and Trash read-only, catches address mismatch, and caps report reads across folders',async t=>{
+ const options=await fixture(t),logs=[],opened=[];let selected,held=false,reportReads=0;
+ const client={on(){},connect:async()=>{},list:async()=>[
+  {path:'All',specialUse:'\\All'},{path:'Spam',specialUse:'\\Junk'},{path:'Trash',specialUse:'\\Trash'},
+  {path:'Private unrelated folder'}
+ ],getMailboxLock:async(folder,mode)=>{
+  assert.equal(held,false);assert.equal(mode.readOnly,true);held=true;selected=folder;opened.push(folder);
+  return {release(){assert.equal(held,true);held=false;}};
+ },search:async query=>{
+  if(query.header)return selected==='All'?[1]:[];
+  assert.equal(query.text,recipient);
+  return selected==='All'?[]:Array.from({length:7},(_,index)=>index+2);
+ },fetchOne:async(uid,query)=>{
+  if(query.envelope)return {envelope:{messageId:`<smtp-test-${id}@aqartkom.app>`,from:[{address:'wrong-sender@example.test'}],to:[{address:'wrong-recipient@example.test'}]},labels:new Set(['\\Sent'])};
+  reportReads++;assert.equal(query.source.maxLength,131072);
+  return {source:Buffer.from(selected==='Spam'?report():report().replace('Action: failed','Action: delayed').replace('Status: 5.1.1','Status: 4.2.0'))};
+ },logout:async()=>{assert.equal(held,false);},close(){}};
+ const result=await checkDelivery({...options,createClient:()=>client,log:(...args)=>logs.push(args)});
+ assert.deepEqual(opened,['All','Spam','Trash']);assert.equal(reportReads,10);assert.equal(result.limited,true);
+ assert.deepEqual(result.coverage,{all_mail:true,junk:true,trash:true});assert.equal(result.report_candidates,14);
+ assert.equal(result.tests[0].sender_matches,false);assert.equal(result.tests[0].recipient_matches,false);
+ assert.equal(result.tests[0].delivery,'failed');assert.equal(result.tests[0].status,'5.1.1');
+ assert.ok(!JSON.stringify(logs).includes('wrong-recipient'));assert.ok(!JSON.stringify(logs).includes(options.env.SMTP_PASS));
 });
 test('no matching report never claims inbox delivery',async t=>{
  const options=await fixture(t);

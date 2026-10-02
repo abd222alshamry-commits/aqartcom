@@ -43,23 +43,48 @@ async function checkDelivery({env=process.env,createClient,log=console.log,state
   timer=setTimeout(()=>client.close(),60000);timer.unref();
   await client.connect();
   const mailboxes=await client.list();
-  const mailbox=mailboxes.find(box=>box.specialUse==='\\All')?.path||'INBOX';
-  lock=await client.getMailboxLock(mailbox,{readOnly:true});
-  const tests=[];
-  for(const testId of request.testIds){
-   const ids=await client.search({header:{'Message-ID':messageId(testId)},since:new Date(now-48*3600000)},{uid:true});
-   tests.push({testId,original_found:Array.isArray(ids)&&ids.length>0,delivery:'unconfirmed'});
+  const allMail=mailboxes.find(box=>box.specialUse==='\\All')?.path;
+  const junk=mailboxes.find(box=>box.specialUse==='\\Junk')?.path;
+  const trash=mailboxes.find(box=>box.specialUse==='\\Trash')?.path;
+  // Gmail All Mail excludes Spam and Trash. Select only these special folders,
+  // never arbitrary user folders, and keep the ten-report limit across all of them.
+  const folders=[...new Set([allMail||'INBOX',junk,trash].filter(Boolean))];
+  const tests=request.testIds.map(testId=>({testId,original_found:false,delivery:'unconfirmed'}));
+  let candidatesFound=0,reportsRead=0,matchedReports=0;
+  for(const folder of folders){
+   lock=await client.getMailboxLock(folder,{readOnly:true});
+   try{
+    for(const test of tests.filter(item=>!item.original_found)){
+     const ids=await client.search({header:{'Message-ID':messageId(test.testId)},since:new Date(now-48*3600000)},{uid:true});
+     if(!Array.isArray(ids)||!ids.length)continue;
+     const message=await client.fetchOne(ids.at(-1),{envelope:true,labels:true},{uid:true});
+     const envelope=message?.envelope;
+     if(envelope?.messageId!==messageId(test.testId))continue;
+     const onlyAddress=(items,address)=>Array.isArray(items)&&items.length===1&&String(items[0]?.address||'').toLowerCase()===address.toLowerCase();
+     Object.assign(test,{original_found:true,
+      sender_matches:onlyAddress(envelope.from,env.SMTP_USER),
+      recipient_matches:onlyAddress(envelope.to,request.recipient),
+      additional_recipients:!!(envelope.cc?.length||envelope.bcc?.length),
+      in_sent:message.labels instanceof Set?message.labels.has('\\Sent'):null});
+    }
+    const ids=await client.search({since:new Date(now-48*3600000),text:request.recipient,or:[{from:'mailer-daemon'},{from:'postmaster'}]},{uid:true});
+    const candidates=Array.isArray(ids)?ids:[];
+    candidatesFound+=candidates.length;
+    const remaining=10-reportsRead;
+    for(const uid of remaining>0?candidates.slice(-remaining):[]){
+     const message=await client.fetchOne(uid,{source:{start:0,maxLength:131072}},{uid:true});
+     reportsRead++;
+     const bounces=parseBounce(message?.source?.toString('utf8'),request.recipient,request.testIds);
+     if(bounces.length)matchedReports++;
+     for(const bounce of bounces){
+      const test=tests.find(item=>item.testId===bounce.testId);
+      // Do not let a delayed report hide a failure found in another folder.
+      if(test.delivery!=='failed')Object.assign(test,{delivery:bounce.action,status:bounce.status});
+     }
+    }
+   }finally{lock.release();lock=null;}
   }
-  const ids=await client.search({since:new Date(now-48*3600000),text:request.recipient,or:[{from:'mailer-daemon'},{from:'postmaster'}]},{uid:true});
-  const candidates=Array.isArray(ids)?ids:[];
-  for(const uid of candidates.slice(-10)){
-   const message=await client.fetchOne(uid,{source:{start:0,maxLength:131072}},{uid:true});
-   for(const bounce of parseBounce(message?.source?.toString('utf8'),request.recipient,request.testIds)){
-    const test=tests.find(item=>item.testId===bounce.testId);
-    Object.assign(test,{delivery:bounce.action,status:bounce.status});
-   }
-  }
-  result={checked:true,tests,matched_reports:candidates.length,limited:candidates.length>10};
+  result={checked:true,tests,coverage:{all_mail:!!allMail,junk:!!junk,trash:!!trash},report_candidates:candidatesFound,reports_read:reportsRead,matched_reports:matchedReports,limited:candidatesFound>reportsRead};
  }catch(error){
   const allowed=['ETIMEDOUT','ESOCKET','ENOTFOUND','ECONNREFUSED','ECONNRESET'];
   result={checked:false,code:error?.authenticationFailed?'AUTH_FAILED':allowed.includes(error?.code)?error.code:'IMAP_CHECK_FAILED'};
