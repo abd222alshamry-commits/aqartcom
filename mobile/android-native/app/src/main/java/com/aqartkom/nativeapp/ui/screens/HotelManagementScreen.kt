@@ -10,7 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.aqartkom.nativeapp.BuildConfig
+import com.aqartkom.nativeapp.SiteActivity
 import com.aqartkom.nativeapp.HotelsViewModel
 import com.aqartkom.nativeapp.data.*
 import kotlinx.coroutines.CancellationException
@@ -21,17 +21,17 @@ fun HotelManagementScreen(modifier: Modifier, vm: HotelsViewModel, user: User?, 
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     var openError by remember { mutableStateOf<String?>(null) }
-    val state by produceState<LoadState<JSONObject>>(LoadState.Loading, user?.id, user?.role, admin, refresh) {
+    val state by produceState<LoadState<JSONObject>>(LoadState.Loading, user?.id, user?.role, user?.adminPermissions, admin, refresh) {
         value = LoadState.Loading
-        if (user == null || (admin && user.role != "admin")) return@produceState
+        if (user == null || (admin && !SiteAccess.can(user, "hotels.read"))) return@produceState
         value = try { LoadState.Ready(vm.management(admin)) }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { LoadState.Error(e.message ?: "تعذر تحميل الفنادق") }
     }
     fun openDashboard() {
         val path = if (admin) "/admin.html" else "/hotel-partner.html"
-        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.API_ORIGIN + path))) }
-        catch (_: Exception) { openError = "تعذر فتح المتصفح على هذا الجهاز" }
+        try { context.startActivity(Intent(context, SiteActivity::class.java).putExtra("path", path)) }
+        catch (_: Exception) { openError = "تعذر فتح لوحة الإدارة" }
     }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -41,7 +41,7 @@ fun HotelManagementScreen(modifier: Modifier, vm: HotelsViewModel, user: User?, 
         }
         if (user == null) {
             item { Text("سجّل الدخول بحساب الإدارة أو الشريك لعرض الفنادق المرتبطة به."); Button(onAccount) { Text("تسجيل الدخول") } }
-        } else if (admin && user.role != "admin") {
+        } else if (admin && !SiteAccess.can(user, "hotels.read")) {
             item { Text("هذا الحساب لا يملك صلاحية إدارة المنصة."); TextButton(onAccount) { Text("مراجعة الحساب") } }
         } else {
             item {
@@ -81,7 +81,7 @@ fun HotelManagementScreen(modifier: Modifier, vm: HotelsViewModel, user: User?, 
             }
             item {
                 Button({ openDashboard() }, Modifier.fillMaxWidth()) { Text(if (admin) "فتح لوحة الإدارة الكاملة" else "إضافة فندق وإدارة الغرف والحجوزات") }
-                Text("تفتح اللوحة في المتصفح؛ قد تحتاج إلى تسجيل الدخول فيه بالحساب نفسه.", style = MaterialTheme.typography.bodySmall)
+                Text("تفتح اللوحة داخل التطبيق باستخدام حسابك الحالي.", style = MaterialTheme.typography.bodySmall)
                 openError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         }

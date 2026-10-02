@@ -34,7 +34,7 @@ class AqartkomApi(context: Context) {
     private val origin = BuildConfig.API_ORIGIN.trimEnd('/')
     private val parser = PropertyParser(origin)
     private val preferences = context.getSharedPreferences("aqartkom_native", Context.MODE_PRIVATE)
-    private val cookies = PersistentCookieJar(context, origin.toHttpUrl())
+    private val cookies = SharedSessionCookieJar(context, origin.toHttpUrl())
     private val client = OkHttpClient.Builder()
         .cookieJar(cookies)
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -131,7 +131,8 @@ class AqartkomApi(context: Context) {
 
     suspend fun login(email: String, password: String): User = withContext(Dispatchers.IO) {
         val body = JSONObject().put("email", email).put("password", password)
-        parseUser(postJson("/api/auth/login", body).getJSONObject("user"))
+        val basic = parseUser(postJson("/api/auth/login", body).getJSONObject("user"))
+        me() ?: basic
     }
 
     suspend fun register(name: String, email: String, phone: String, password: String): User = withContext(Dispatchers.IO) {
@@ -140,8 +141,7 @@ class AqartkomApi(context: Context) {
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
-        executeJson(Request.Builder().url("$origin/api/auth/logout").post(ByteArray(0).toRequestBody()).build())
-        cookies.clear()
+        try { executeJson(Request.Builder().url("$origin/api/auth/logout").post(ByteArray(0).toRequestBody()).build()) } finally { cookies.clear() }
     }
 
     suspend fun favorites(): Set<String> = withContext(Dispatchers.IO) {
@@ -228,7 +228,8 @@ class AqartkomApi(context: Context) {
         }
     }
 
-    private fun parseUser(j: JSONObject) = User(j.optLong("id"), j.optString("name"), j.optString("email"), j.optString("phone"), j.optString("role", "user"))
+    private fun parseUser(j: JSONObject) = SiteAccess.user(j)
+    suspend fun prepareSiteSession() { cookies.awaitReady() }
 
     private fun mediaInfo(resolver: ContentResolver, uri: Uri): LocalMedia {
         var name = "media"
@@ -289,21 +290,6 @@ class AqartkomApi(context: Context) {
 }
 
 class ApiException(message: String, val status: Int) : Exception(message)
-
-private class PersistentCookieJar(context: Context, private val origin: HttpUrl) : CookieJar {
-    private val preferences = context.getSharedPreferences("aqartkom_session", Context.MODE_PRIVATE)
-    private val values = mutableMapOf<String, Cookie>()
-    init { preferences.getStringSet("cookies", emptySet()).orEmpty().mapNotNull { Cookie.parse(origin, it) }.forEach { values[it.name] = it } }
-    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) = synchronized(values) {
-        cookies.forEach { values[it.name] = it }
-        preferences.edit().putStringSet("cookies", values.values.map { it.toString() }.toSet()).apply()
-    }
-    override fun loadForRequest(url: HttpUrl): List<Cookie> = synchronized(values) {
-        val now = System.currentTimeMillis(); values.entries.removeAll { it.value.expiresAt < now }
-        values.values.filter { it.matches(url) }
-    }
-    fun clear() = synchronized(values) { values.clear(); preferences.edit().clear().apply() }
-}
 
 private data class LocalMedia(val uri: Uri, val name: String, val mime: String, val size: Long)
 

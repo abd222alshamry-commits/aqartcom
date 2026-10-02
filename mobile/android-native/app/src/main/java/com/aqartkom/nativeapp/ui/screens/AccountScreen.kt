@@ -22,7 +22,7 @@ import com.aqartkom.nativeapp.AppViewModel
 import com.aqartkom.nativeapp.data.User
 
 @Composable
-fun AccountScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy: Boolean, favoriteCount: Int, compareCount: Int, darkMode: Boolean, toggleDarkMode: () -> Unit, onFavorites: () -> Unit, onCompare: () -> Unit, onProperties: () -> Unit, onInquiries: () -> Unit, onAdd: () -> Unit, onHotels: () -> Unit) {
+fun AccountScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy: Boolean, favoriteCount: Int, compareCount: Int, darkMode: Boolean, toggleDarkMode: () -> Unit, onFavorites: () -> Unit, onCompare: () -> Unit, onProperties: () -> Unit, onInquiries: () -> Unit, onAdd: () -> Unit, onHotels: () -> Unit, onServices: () -> Unit, onSol: () -> Unit) {
     var auth by rememberSaveable { mutableStateOf(false) }
     if (auth && user == null) {
         BackHandler { auth = false }
@@ -57,7 +57,11 @@ fun AccountScreen(modifier: Modifier, viewModel: AppViewModel, user: User?, busy
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileItem("طلبات التواصل", "الاستفسارات الواردة على إعلاناتك", Icons.Default.Forum) { if (user == null) auth = true else onInquiries() }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                ProfileItem("الفنادق والحجوزات", "ابحث عن إقامة وتابع حجوزات هذا الجهاز", Icons.Default.Hotel, onHotels)
+                ProfileItem("الفنادق والحجوزات", "الفنادق والشقق والمزارع والحجوزات والدفع", Icons.Default.Hotel, onHotels)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileItem("الخدمات والإدارة", "لوحات المستضيفين والمكاتب والمشرفين", Icons.Default.Dashboard, onServices)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ProfileItem("سول — مساعدك الخاص", "ذاكرة وتفضيلات ومقارنة العروض", Icons.Default.AutoAwesome, onSol)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ProfileItem("أضف عقارًا", "اعرض عقارك بالصور والفيديو", Icons.Default.AddHome) { if (user == null) auth = true else onAdd() }
             }

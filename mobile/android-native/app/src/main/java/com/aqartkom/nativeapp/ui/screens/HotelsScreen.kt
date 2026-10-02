@@ -77,7 +77,7 @@ fun HotelsScreen(modifier: Modifier, vm: HotelsViewModel, user: User?, onAccount
             if (page == HotelPage.Search) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton({ management = "partner" }, Modifier.weight(1f)) { Text("شركاء الفنادق") }
-                    if (user?.role == "admin") Button({ management = "admin" }, Modifier.weight(1f)) { Text("إدارة الفنادق") }
+                    if (SiteAccess.can(user, "hotels.read")) Button({ management = "admin" }, Modifier.weight(1f)) { Text("إدارة الفنادق") }
                     else if (user == null) TextButton(onAccount, Modifier.weight(1f)) { Text("دخول الإدارة والشركاء") }
                 }
             }

@@ -22,6 +22,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val searchGeneration = RequestGeneration()
     private val homeGeneration = RequestGeneration()
     private val accountGeneration = RequestGeneration()
+    private val sessionGeneration = RequestGeneration()
     private val knownProperties = mutableMapOf<String, Property>()
     private val _home = MutableStateFlow<LoadState<List<Property>>>(LoadState.Loading)
     val home = _home.asStateFlow()
@@ -155,14 +156,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun retrySelected() { selectedId?.let(::openProperty) }
 
-    private fun restoreSession() = viewModelScope.launch {
-        runCatching { api.me() }.getOrNull()?.let {
-            _user.value = it
-            _favorites.value = _favorites.value + runCatching { api.favorites() }.getOrDefault(emptySet())
-        }
+    private fun restoreSession() { refreshSession() }
+    fun refreshSession() = viewModelScope.launch {
+        val request = sessionGeneration.next()
+        try {
+            val refreshed = api.me()
+            if (!sessionGeneration.accepts(request)) return@launch
+            if (_user.value?.id != refreshed?.id) {
+                accountGeneration.next(); _dashboard.value = LoadState.Loading
+                _favoriteListings.value = LoadState.Loading
+                _favorites.value = localFavorites.getStringSet("ids", emptySet()).orEmpty()
+            }
+            _user.value = refreshed
+            if (refreshed != null) {
+                val saved = api.favorites()
+                if (sessionGeneration.accepts(request)) _favorites.value = _favorites.value + saved
+            }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { /* Keep last state while offline. */ }
     }
 
     fun authenticate(register: Boolean, name: String, email: String, phone: String, password: String, done: () -> Unit) {
+        sessionGeneration.next()
         viewModelScope.launch {
             _busy.value = true
             try {
@@ -179,6 +193,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() = viewModelScope.launch {
         if (_busy.value) { _message.value = "انتظر انتهاء الرفع أولًا"; return@launch }
+        sessionGeneration.next()
         runCatching { api.logout() }
         _user.value = null
         accountGeneration.next()
