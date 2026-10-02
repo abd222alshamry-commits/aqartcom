@@ -22,7 +22,7 @@ function setup(t,{ua='AqartkomNative/170',url='https://example.test/hotels.html'
  return {w,run:s=>vm.runInContext(s,browser.getInternalVMContext())};
 }
 async function review(w){
- await w.bookingForm(1,2);const form=w.document.getElementById('bookingForm');form.elements.guest_name.value='Test guest';form.elements.guest_phone.value='00000000';form.querySelector('[type=submit]').click();
+ await w.bookingForm(1,2);const form=w.document.getElementById('bookingForm');form.elements.guest_name.value='Test guest';form.elements.guest_phone.value='00000000';form.elements.guest_email.value='guest@example.test';form.querySelector('[type=submit]').click();
 }
 function confirm(w){w.document.querySelector('[name=accept_stay_terms]').checked=true;w.document.getElementById('confirmBooking').click();}
 test('Android recovers the same request after WebView/process restart and retains the receipt',async t=>{
@@ -31,7 +31,7 @@ test('Android recovers the same request after WebView/process restart and retain
  const key='aq-stay-pending',saved=a.w.localStorage.getItem(key);assert.ok(saved);assert.equal(a.w.sessionStorage.getItem(key),null);
  const b=setup(t,{saved:{[key]:saved},book:async body=>{assert.deepEqual(body,firstBody);return {ok:true,json:async()=>({data:receipt})};}});
  await b.w.bookingForm(1,2);assert.ok(b.w.document.getElementById('retryBooking'));b.w.document.getElementById('retryBooking').click();await tick();
- assert.equal(b.w.localStorage.getItem(key),null);assert.match(b.w.document.querySelector('.receipt-header').textContent,/حجزك مؤكد/);
+ assert.equal(b.w.localStorage.getItem(key),null);assert.match(b.w.document.querySelector('.receipt-header').textContent,/حجزك مؤكد/);assert.equal(b.w.document.getElementById('downloadBooking').getAttribute('href'),'/api/stays/booking/'+receipt.booking_code+'/document');
  const c=setup(t,{saved:{'aq-stay-receipts':b.w.localStorage.getItem('aq-stay-receipts')}});await c.w.showMyBookings();
  assert.match(c.w.document.getElementById('bookingList').textContent,/AQH-123456789012345678/);assert.match(c.w.document.getElementById('bookingsNote').textContent,/هذا الجهاز/);
 });

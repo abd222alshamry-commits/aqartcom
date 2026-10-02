@@ -20,4 +20,16 @@ A durable outbox retries delivery with exponential delays (up to 8 attempts), re
 
 Android 1.9 adds a bell and opens `/notifications.html`. Phone notifications are opt-in and need Android permission. They are checked every 30 seconds on a visible native screen and through WorkManager at a minimum 15-minute interval in the background, subject to network and battery restrictions. These are periodic alerts, not real-time FCM push. Account-specific deduplication prevents repeatedly alerting on the same message; notification contents are private on the lock screen.
 
+## Booking email and PDF copies
+
+Both the hotel's configured manager address and the guest receive the request acknowledgement and subsequent approval, rejection, cancellation and payment updates. Addresses are deduplicated per event. The current website/Android hosted checkout requires the guest email before a new booking; retrying an existing idempotency key retains its previous behavior. Legacy clients that omitted email still receive their existing on-screen receipt.
+
+Each email includes escaped Arabic HTML, plain text, a link to the current booking, a PDF download link, and a PDF attachment. `document_snapshot` stores only document fields in the outbox transaction so an attachment describes the event as it was recorded. The latest download reflects the current booking status. A pending request or a hotel-approved request awaiting payment is explicitly not a confirmed stay. No attachment is represented as proof of payment.
+
+Guest PDF/print views use the existing unguessable booking-code access model; manager views also require hotel ownership or the existing authorized administration scope. Document endpoints are private/no-store and do not expose guest email, phone, payment tokens or internal commission figures. Generated text is escaped; PDF rendering disables JavaScript and network access.
+
+PDF rendering uses the Docker-installed Chromium with Puppeteer Core (Node >=22.12). Only one Chromium job runs at once, at most two additional jobs can wait, and up to 16 generated documents are cached in memory for five minutes. A startup readiness check generates a synthetic document without sending email or creating a booking. SMTP acceptance is checked before the outbox marks a message sent. Rendering/delivery failures use the existing retry queue.
+
+The guest receipt and hotel booking table expose Download PDF. Browsers receive a PDF attachment response. Android 1.7+ opens the document page and uses the existing native print adapter; select Save as PDF in Android's dialog. The currently delivered Android 1.9 uses these hosted pages and needs no new APK for this change.
+
 Validation: local SQL/HTTP and DOM tests cover pending creation, request retry without duplicate booking or notification, owner scope, refusal reasons, terminal-state protection, both payment-order cases, email retry, SQL rollback, guest withdrawal, manager controls and the guest checkout/recovery flow. No test email or test booking is sent to production by these tests.

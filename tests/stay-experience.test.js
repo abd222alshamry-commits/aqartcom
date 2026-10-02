@@ -27,7 +27,7 @@ test('search, availability and confirmation agree on nightly prices, discounts a
  const availability=await call('/api/stays/'+h.id+'/availability?'+search);assert.equal(availability.json.data[0].quote.total,370);assert.equal(availability.json.data[0].quote.available,1);
  const quote=await call('/api/mobile/hotels/quote?'+new URLSearchParams(fields));assert.equal(quote.json.data.total,370);assert.deepEqual(quote.json.data.nightly.map(n=>n.total),[100,150,120]);
  assert.equal((await call('/api/mobile/hotels/quote?'+new URLSearchParams({...fields,children:2}))).status,409);
- const b={...fields,guest_name:'Test Guest',guest_phone:'+963900000000',payment_method:'pay_at_hotel',expected_total:370,expected_currency:'USD',expected_terms_version:1,booking_flow:2,accept_stay_terms:true,idempotency_key:crypto.randomUUID()};
+ const b={...fields,guest_name:'Test Guest',guest_email:'guest@example.test',guest_phone:'+963900000000',payment_method:'pay_at_hotel',expected_total:370,expected_currency:'USD',expected_terms_version:1,booking_flow:2,accept_stay_terms:true,idempotency_key:crypto.randomUUID()};
  assert.equal((await call('/api/mobile/hotels/book',{...b,accept_stay_terms:'yes'})).status,400);
  const booked=await call('/api/mobile/hotels/book',b);assert.equal(booked.status,201,JSON.stringify(booked));assert.equal(booked.json.data.children,1);assert.equal(booked.json.data.status,'pending');assert.equal(booked.json.data.payment_status,'pending');
  assert.deepEqual(booked.json.data.price_breakdown.map(n=>n.total),[100,150,120]);
@@ -53,7 +53,7 @@ test('mixed seasonal currencies and minimum stays are explained without misleadi
  a=await call('/api/mobile/hotels/quote?'+new URLSearchParams(fields));assert.equal(a.status,409);assert.match(a.json.error,/الحد الأدنى/);
  await db.query('UPDATE hotel_room_rates SET min_nights=1 WHERE room_id=$1',[room.id]);
  const q=(await call('/api/mobile/hotels/quote?'+new URLSearchParams(fields))).json.data;
- const b={...fields,guest_name:'Test Guest',guest_phone:'123456789',payment_method:'pay_at_hotel',expected_total:q.total,expected_currency:q.currency,expected_terms_version:q.terms_version,idempotency_key:crypto.randomUUID()};
+ const b={...fields,guest_name:'Test Guest',guest_email:'guest@example.test',guest_phone:'123456789',payment_method:'pay_at_hotel',expected_total:q.total,expected_currency:q.currency,expected_terms_version:q.terms_version,idempotency_key:crypto.randomUUID()};
  await db.query('UPDATE hotels SET terms_version=terms_version+1 WHERE id=$1',[h.id]);assert.equal((await call('/api/mobile/hotels/book',b)).status,409);
  assert.equal((await db.query('SELECT COUNT(*)::int n FROM hotel_bookings')).rows[0].n,0);
 });
@@ -69,7 +69,7 @@ test('real website journey selects a chalet, reviews, recovers a lost confirmati
  let {w}=browser();await until(()=>w.document.querySelector('.hotel-name'));
  assert.equal(w.document.querySelector('.price').textContent,'300 USD');w.document.querySelector('.hotel-name').click();await until(()=>w.document.querySelector('.room-book'));
  assert.equal(w.document.querySelectorAll('#hotelMedia .media-gallery-item').length,1);w.document.querySelector('.room-book').click();await until(()=>w.document.getElementById('bookingForm'));
- const form=w.document.getElementById('bookingForm');form.elements.guest_name.value='ضيف اختبار';form.elements.guest_phone.value='+963900000000';form.elements.special_requests.value='وصول مساءً';form.querySelector('[type=submit]').click();
+ const form=w.document.getElementById('bookingForm');form.elements.guest_name.value='ضيف اختبار';form.elements.guest_phone.value='+963900000000';form.elements.guest_email.value='guest@example.test';form.elements.special_requests.value='وصول مساءً';form.querySelector('[type=submit]').click();
  assert.ok(w.document.querySelector('#confirmBookingForm [name=accept_stay_terms]').required);assert.match(w.document.querySelector('.review-details').textContent,/ضيف اختبار/);
  w.document.getElementById('editGuest').click();assert.equal(w.document.getElementById('bookingForm').elements.special_requests.value,'وصول مساءً');w.document.getElementById('reviewBooking').click();
  w.document.querySelector('[name=accept_stay_terms]').checked=true;w.document.getElementById('confirmBooking').click();await until(()=>w.document.getElementById('retryBooking')&&!w.document.getElementById('retryBooking').disabled);

@@ -227,12 +227,13 @@ async function dispatchSavedSearchNotification(s,property){
 
 
 
+const bookingDocuments=require('./hotel-booking-document');
+const renderBookingPdf=bookingDocuments.createPdfRenderer();
+bookingDocuments.register(app,{pool,requireOfficeMember,ownedHotel,renderPdf:renderBookingPdf});
+bookingDocuments.verifyRenderer(renderBookingPdf).then(result=>console.log('Hotel booking PDF verification:',JSON.stringify(result)));
 const bookingApproval=require('./hotel-booking-approval').createService({pool,syncHotel,
  emailReady:()=>notificationConfig().emailReady,pushReady:()=>notificationConfig().pushReady,
- sendEmail:async job=>{
-  const transporter=nodemailer.createTransport({host:process.env.SMTP_HOST,port:Number(process.env.SMTP_PORT||587),secure:String(process.env.SMTP_SECURE||'false')==='true',auth:{user:process.env.SMTP_USER,pass:process.env.SMTP_PASS},connectionTimeout:15000,greetingTimeout:15000,socketTimeout:30000});
-  await transporter.sendMail({from:process.env.SMTP_FROM||process.env.SMTP_USER,to:job.recipient,subject:job.title,text:job.body+'\n'+(process.env.APP_URL||'http://localhost:'+port)+job.action_url,messageId:'<hotel-notification-'+job.id+'@aqartkom.app>'});
- },sendPush:async job=>{
+ sendEmail:job=>bookingDocuments.sendBookingEmail(job,{pool,renderPdf:renderBookingPdf,createTransport:nodemailer.createTransport}),sendPush:async job=>{
   const subscriptions=(await pool.query('SELECT * FROM push_subscriptions WHERE user_id=$1',[job.user_id])).rows;
   for(const sub of subscriptions){try{await webpush.sendNotification({endpoint:sub.endpoint,keys:{p256dh:sub.p256dh,auth:sub.auth}},JSON.stringify({title:job.title,body:job.body,url:job.action_url}),{TTL:3600,timeout:15000});}catch(e){if([404,410].includes(e.statusCode))await pool.query('DELETE FROM push_subscriptions WHERE id=$1',[sub.id]);else throw e;}}
  }});

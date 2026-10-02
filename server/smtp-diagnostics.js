@@ -77,4 +77,4 @@ async function sendSmtpTest({env=process.env,createTransport,log=console.log,sta
  return report(result);
 }
 
-module.exports={verifySmtp,sendSmtpTest,getSmtpStatus};
+module.exports={verifySmtp,sendSmtpTest,getSmtpStatus,smtpOptions};

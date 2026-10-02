@@ -17,7 +17,7 @@ test('manager opens booking from notification, retains failed decision, submits 
  return {ok:code<400,status:code,json:async()=>body};};
  w.eval(fs.readFileSync(__dirname+'/../hotel-partner.js','utf8'));
  await waitFor(()=>w.document.querySelector('#booking-7'));assert.match(w.document.getElementById('panel').textContent,/بانتظار موافقتك/);assert.match(w.document.getElementById('panel').textContent,/خدمة البريد غير مهيأة/);
- assert.match(w.document.querySelector('#booking-7 .booking-delivery').textContent,/بانتظار الإرسال/);
+ assert.match(w.document.querySelector('#booking-7 .booking-delivery').textContent,/بانتظار الإرسال/);assert.equal(w.document.querySelector('#booking-7 .booking-pdf').getAttribute('href'),'/api/office/hotels/5/bookings/7/document.pdf');assert.ok(w.document.querySelector('#booking-7 .guest-booking-delivery'));
  emailReady=true;connection={verified:false};deliveryStatus='failed';attempts=8;await w.renderBookings();
  assert.match(w.document.getElementById('panel').textContent,/تعذر الاتصال بخدمة البريد/);
  assert.match(w.document.querySelector('#booking-7 .booking-delivery').textContent,/تعذر إرسال البريد/);

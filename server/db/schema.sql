@@ -1368,4 +1368,5 @@ CREATE TABLE IF NOT EXISTS hotel_notification_outbox (
  UNIQUE(event_key,channel,recipient)
 );
 CREATE INDEX IF NOT EXISTS idx_hotel_notification_queue ON hotel_notification_outbox(status,next_attempt_at);
+ALTER TABLE hotel_notification_outbox ADD COLUMN IF NOT EXISTS document_snapshot JSONB;
 CREATE INDEX IF NOT EXISTS idx_hotel_approval_pending ON hotel_bookings(hotel_id,approval_status) WHERE status='pending';

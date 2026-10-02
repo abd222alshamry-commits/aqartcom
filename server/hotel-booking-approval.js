@@ -4,21 +4,25 @@ const day=value=>value instanceof Date?value.toISOString().slice(0,10):String(va
 function createService({pool,sendEmail,sendPush,emailReady=()=>false,pushReady=()=>false,syncHotel=async()=>{}}){
  async function enqueue(db,b,event){
   const h=(await db.query('SELECT h.*,o.owner_id office_owner FROM hotels h LEFT JOIN offices o ON o.id=h.office_id WHERE h.id=$1',[b.hotel_id])).rows[0];
+  const room=(await db.query('SELECT name FROM hotel_rooms WHERE id=$1 AND hotel_id=$2',[b.room_id,b.hotel_id])).rows[0]||{};
+  const document=require('./hotel-booking-document').snapshot(b,h,room);
   const managers=(await db.query(`SELECT DISTINCT u.id,u.email FROM users u WHERE u.is_active=TRUE AND (u.id=$1 OR u.id=$2 OR (u.office_id=$3 AND u.role='agent'))`,[h.owner_id,h.office_owner,h.office_id])).rows;
   const url=`/hotel-partner.html?hotel=${b.hotel_id}&tab=bookings`;
   const titles={requested:'طلب حجز جديد بانتظار تأكيد الفندق',approved:b.status==='confirmed'?'تم تأكيد الحجز من الفندق':'وافق الفندق على الطلب — بانتظار الدفع',rejected:'رفض الفندق طلب الحجز',cancelled:'تم إلغاء الحجز',payment_confirmed:b.status==='confirmed'?'تم تأكيد الحجز والدفعة':'تم استلام الدفعة — بانتظار تأكيد الفندق'};
   const title=titles[event]||'تحديث طلب الحجز';
-  const body=`${h.name} — ${b.booking_code}\n${day(b.check_in)} إلى ${day(b.check_out)} · ${b.rooms_count} غرفة · ${b.total} ${b.currency}${(event==='cancelled'?b.cancellation_reason:b.approval_note)?'\n'+(event==='cancelled'?b.cancellation_reason:b.approval_note):''}`;
-  const recipients=[...(['requested','cancelled'].includes(event)?managers.map(u=>({...u,manager:true})):[]),...(event!=='requested'&&b.user_id?[{id:b.user_id,email:b.guest_email,manager:false}]:[])];
+  const body=`${h.name} — ${b.booking_code}\n${room.name||''}\n${day(b.check_in)} إلى ${day(b.check_out)} · ${b.rooms_count} غرفة · ${b.nights} ليلة\nالإجمالي: ${b.total} ${b.currency}${(event==='cancelled'?b.cancellation_reason:b.approval_note)?'\n'+(event==='cancelled'?b.cancellation_reason:b.approval_note):''}`;
+  const guestTitle=event==='requested'?'تم استلام طلبك — بانتظار تأكيد الفندق':title;
+  const recipients=[...(['requested','cancelled','payment_confirmed'].includes(event)?managers.map(u=>({...u,manager:true})):[]),...(b.user_id?[{id:b.user_id,email:b.guest_email,manager:false}]:[])];
   const key=`hotel:${b.id}:${event}`;
   for(const u of recipients){
    const target=u.manager?url:`/hotels.html#booking=${b.booking_code}`;
-   await db.query(`INSERT INTO user_notifications(user_id,type,title,body,hotel_booking_id,action_url,event_key) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(event_key,user_id) DO NOTHING`,[u.id,'hotel_booking_'+event,title,body,b.id,target,key]);
-   await db.query(`INSERT INTO hotel_notification_outbox(booking_id,event_key,channel,recipient,user_id,title,body,action_url) VALUES($1,$2,'push',$3,$4,$5,$6,$7) ON CONFLICT(event_key,channel,recipient) DO NOTHING`,[b.id,key,String(u.id),u.id,title,body,target]);
+   const recipientTitle=u.manager?title:guestTitle;
+   await db.query(`INSERT INTO user_notifications(user_id,type,title,body,hotel_booking_id,action_url,event_key) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(event_key,user_id) DO NOTHING`,[u.id,'hotel_booking_'+event,recipientTitle,body,b.id,target,key]);
+   await db.query(`INSERT INTO hotel_notification_outbox(booking_id,event_key,channel,recipient,user_id,title,body,action_url) VALUES($1,$2,'push',$3,$4,$5,$6,$7) ON CONFLICT(event_key,channel,recipient) DO NOTHING`,[b.id,key,String(u.id),u.id,recipientTitle,body,target]);
   }
   const owner=managers.find(u=>String(u.id)===String(h.owner_id))||managers.find(u=>String(u.id)===String(h.office_owner));
-  const emails=[...(['requested','cancelled'].includes(event)?[{email:h.booking_email||owner?.email,target:url}]:[]),...(event!=='requested'?[{email:b.guest_email,target:`/hotels.html#booking=${b.booking_code}`}]:[])];
-  for(const {email,target} of emails)if(email)await db.query(`INSERT INTO hotel_notification_outbox(booking_id,event_key,channel,recipient,title,body,action_url) VALUES($1,$2,'email',$3,$4,$5,$6) ON CONFLICT(event_key,channel,recipient) DO NOTHING`,[b.id,key,email,title,body+(event==='requested'?'\nاسم الضيف: '+b.guest_name+'\nالهاتف: '+b.guest_phone:''),target]);
+  const emails=[{email:h.booking_email||owner?.email,target:url,manager:true},{email:b.guest_email,target:`/hotels.html#booking=${b.booking_code}`,manager:false}];
+  for(const {email,target,manager} of emails)if(email)await db.query(`INSERT INTO hotel_notification_outbox(booking_id,event_key,channel,recipient,title,body,action_url,document_snapshot) VALUES($1,$2,'email',$3,$4,$5,$6,$7::jsonb) ON CONFLICT(event_key,channel,recipient) DO NOTHING`,[b.id,key,email.trim().toLowerCase(),manager?title:guestTitle,body+'\nاسم الضيف: '+b.guest_name+(manager?'\nالهاتف: '+b.guest_phone+'\nبريد الضيف: '+(b.guest_email||'لم يسجّل'):'')+(event==='requested'?'\nالحجز غير مؤكد حتى موافقة الفندق واستكمال الدفع المطلوب.':''),target,JSON.stringify(document)]);
  }
  let running=false;
  async function drain(){
@@ -87,12 +91,12 @@ function createService({pool,sendEmail,sendPush,emailReady=()=>false,pushReady=(
    res.set('Cache-Control','no-store');
    const h=await ownedHotel(req.params.id,req.office);if(!h)return res.status(404).json({error:'الفندق غير موجود'});
    const owner=(await pool.query('SELECT u.email FROM hotels h LEFT JOIN offices o ON o.id=h.office_id JOIN users u ON u.id=COALESCE(h.owner_id,o.owner_id) WHERE h.id=$1',[req.params.id])).rows[0];
-   const deliveries=(await pool.query(`SELECT n.booking_id,n.status,n.recipient,n.sent_at,n.attempts,n.next_attempt_at FROM hotel_notification_outbox n JOIN hotel_bookings b ON b.id=n.booking_id WHERE b.hotel_id=$1 AND n.channel='email' AND n.event_key='hotel:'||b.id||':requested' ORDER BY b.created_at DESC,n.id DESC LIMIT 500`,[req.params.id])).rows;
+   const deliveries=(await pool.query(`SELECT n.booking_id,n.status,n.recipient,n.sent_at,n.attempts,n.next_attempt_at,n.event_key,CASE WHEN n.action_url LIKE '/hotel-partner.html%' THEN 'manager' ELSE 'guest' END audience FROM hotel_notification_outbox n JOIN hotel_bookings b ON b.id=n.booking_id WHERE b.hotel_id=$1 AND n.channel='email' ORDER BY b.created_at DESC,n.id DESC LIMIT 1000`,[req.params.id])).rows;
    res.json({email:h.booking_email||owner?.email||null,custom_email:h.booking_email||'',email_ready:emailReady(),email_connection:emailReady()?require('./smtp-diagnostics').getSmtpStatus():{verified:false,code:'NOT_CONFIGURED',checked_at:null},deliveries,pending:(await pool.query("SELECT COUNT(*)::int count FROM hotel_bookings WHERE hotel_id=$1 AND status='pending' AND approval_status='pending'",[req.params.id])).rows[0].count});
   }catch(e){res.status(500).json({error:'تعذر تحميل إعدادات الإشعارات'});}});
   app.put('/api/office/hotels/:id/booking-notifications',requireOfficeMember,sameOrigin,async(req,res)=>{try{
    if(!await ownedHotel(req.params.id,req.office))return res.status(404).json({error:'الفندق غير موجود'});
-   const email=String(req.body.email||'').trim().toLowerCase();if(email&&(email.length>220||!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)))return res.status(400).json({error:'أدخل بريد مدير الفندق بشكل صحيح'});
+   const email=String(req.body.email||'').trim().toLowerCase();if(email&&(email.length>220||!/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(email)))return res.status(400).json({error:'أدخل بريد مدير الفندق بشكل صحيح'});
    await pool.query('UPDATE hotels SET booking_email=$2,updated_at=NOW() WHERE id=$1',[req.params.id,email||null]);res.json({ok:true});
   }catch(e){res.status(500).json({error:'تعذر حفظ بريد الفندق'});}});
  }

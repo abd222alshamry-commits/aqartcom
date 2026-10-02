@@ -21,7 +21,7 @@ function totalFor(price, nights, rooms, discount) {
 }
 function guest(input) {
   const result = { name: String(input.guest_name || '').trim(), phone: String(input.guest_phone || '').trim(), email: String(input.guest_email || '').trim(), requests: String(input.special_requests || '').trim() };
-  if (result.name.length < 2 || result.name.length > 180 || !/^[+\d\s()\-٠-٩]{7,80}$/.test(result.phone) || result.email.length > 220 || (result.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.email)) || result.requests.length > 2000) throw new HotelError(400, 'راجع اسم الضيف ورقم الهاتف والبريد الإلكتروني');
+  if (result.name.length < 2 || result.name.length > 180 || !/^[+\d\s()\-٠-٩]{7,80}$/.test(result.phone) || result.email.length > 220 || (result.email && !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(result.email)) || result.requests.length > 2000) throw new HotelError(400, 'راجع اسم الضيف ورقم الهاتف والبريد الإلكتروني');
   return result;
 }
 function requestHash(s, g, expected, currency, method='pay_at_hotel', payment=null) { const parts=[s,g,expected,currency,method]; if(payment)parts.push(payment); return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex'); }
@@ -37,7 +37,7 @@ async function quote(db, s, lock = false) {
 function sendError(res, error) { if (!error.status) console.error('Mobile hotel request failed:', error.message); return res.status(error.status || 500).json({ error: error.status ? error.message : 'تعذر إكمال طلب الفندق' }); }
 function receipt(row, hotelName, roomName) {
   const keys = ['booking_code', 'hotel_id', 'room_id', 'check_in', 'check_out', 'nights', 'rooms_count', 'adults', 'children', 'total', 'currency', 'status', 'payment_method', 'payment_status', 'cancellation_deadline','stay_terms_snapshot','price_breakdown','subtotal','approval_status','approval_note','decided_at'];
-  return { ...Object.fromEntries(keys.map(key => [key, row[key]])), hotel_name: hotelName, room_name: roomName };
+  return { ...Object.fromEntries(keys.map(key => [key, row[key]])), hotel_name: hotelName, room_name: roomName, email_requested: Boolean(row.guest_email) };
 }
 function register(app, { pool, getCurrentUser, syncHotel, manualPayments, bookingApproval }) {
   require('./stay-experience').register(app,{pool,getCurrentUser,syncHotel,stay,quote,receipt,bookingApproval});
@@ -67,6 +67,7 @@ function register(app, { pool, getCurrentUser, syncHotel, manualPayments, bookin
         return res.json({ data: receipt(previous,names.hotel_name,names.room_name), manual_payment, repeated:true });
       }
       if (s.checkIn < inventory.today()) throw new HotelError(400, 'تاريخ الوصول أصبح في الماضي؛ اختر تواريخ جديدة');
+      if(b.booking_flow===2&&!g.email)throw new HotelError(400,'أدخل بريد العميل لإرسال تفاصيل الحجز ونسخة PDF إليه');
       // Shares the same room lock used by the website booking endpoint.
       await client.query('SELECT pg_advisory_xact_lock($1)', [s.roomId]);
       const q = await quote(client, s, true);

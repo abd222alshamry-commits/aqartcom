@@ -7,7 +7,7 @@ COPY scripts/build-sol.cjs scripts/ONNX-RUNTIME-LICENSE.txt ./scripts/
 RUN npm run build:sol
 
 FROM node:22-alpine
-RUN apk add --no-cache ffmpeg postgresql-client font-dejavu
+RUN apk add --no-cache ffmpeg postgresql-client font-dejavu chromium
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev

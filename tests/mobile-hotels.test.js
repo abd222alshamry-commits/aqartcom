@@ -14,6 +14,7 @@ test('hotel requests reject invalid calendar dates, past dates, and fractional c
   for(const bad of [{check_in:'2099-02-30'}, {check_out:'2099-03-01'}, {check_in:'2020-01-01',check_out:'2020-01-03'}, {adults:1.5}, {rooms_count:0}]) assert.throws(()=>stay({...b,...bad}));
   assert.deepEqual(totalFor('125.50',2,2,'10'), {subtotal:502,total:451.8,discount:10});
   assert.throws(()=>guest({guest_name:'A',guest_phone:'1'}));
+  assert.throws(()=>guest({guest_name:'Guest',guest_phone:'12345678',guest_email:'one@example.test,two@example.test'}));
 });
 
 test('mobile booking quote and idempotent confirmation use real SQL transactions', async t => {
