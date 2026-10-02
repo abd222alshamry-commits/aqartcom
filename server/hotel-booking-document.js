@@ -36,20 +36,24 @@ function createPdfRenderer({binary=process.env.CHROMIUM_PATH||'/usr/bin/chromium
   const found=cache.get(key);if(found&&Date.now()-found.at<300000)return found.buffer;
   if(active>=3)throw Object.assign(Error('PDF_BUSY'),{status:503,code:'PDF_BUSY'});
   active++;const previous=tail;let release;tail=new Promise(resolve=>{release=resolve;});
-  await previous;let browser,timer;
+  await previous;let browser,timer,stage='load';
   try{
    const cached=cache.get(key);if(cached&&Date.now()-cached.at<300000)return cached.buffer;
    const start=launch||(await import(require.resolve('puppeteer-core'))).launch;
-   browser=await start({executablePath:binary,headless:true,pipe:true,timeout:15000,handleSIGINT:false,handleSIGTERM:false,handleSIGHUP:false,args:['--no-sandbox','--no-zygote','--single-process','--disable-gpu','--disable-dev-shm-usage','--disable-extensions','--disable-background-networking','--disable-sync','--no-first-run','--renderer-process-limit=1']});
+   stage='launch';
+   browser=await start({executablePath:binary,headless:true,pipe:true,timeout:15000,handleSIGINT:false,handleSIGTERM:false,handleSIGHUP:false,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--disable-extensions','--disable-background-networking','--disable-sync','--no-first-run','--renderer-process-limit=1']});
    timer=setTimeout(()=>browser.process()?.kill('SIGKILL'),30000);timer.unref();
-   const page=await browser.newPage();page.setDefaultTimeout(15000);
+   stage='page';const page=await browser.newPage();page.setDefaultTimeout(15000);
    await page.setJavaScriptEnabled(false);await page.setOfflineMode(true);
-   await page.setContent(html,{waitUntil:'load',timeout:15000});
-   const buffer=Buffer.from(await page.pdf({format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false,timeout:15000}));
+   stage='content';await page.setContent(html,{waitUntil:'load',timeout:15000});
+   stage='pdf';const buffer=Buffer.from(await page.pdf({format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false,timeout:15000}));
    if(!buffer.subarray(0,5).equals(Buffer.from('%PDF-'))||buffer.length>5*1024*1024)throw Object.assign(Error('PDF_INVALID'),{code:'PDF_INVALID'});
    cache.set(key,{at:Date.now(),buffer});while(cache.size>16)cache.delete(cache.keys().next().value);
    return buffer;
-  }catch(error){throw Object.assign(Error('PDF_RENDER_FAILED'),{code:'PDF_RENDER_FAILED'});}
+  }catch(error){
+   const reason=/cannot find (?:package|module)/i.test(error.message)?'DEPENDENCY_MISSING':/ENOENT|not found at the configured executablePath/i.test(error.message)?'EXECUTABLE_MISSING':/target closed|connection closed/i.test(error.message)?'BROWSER_CLOSED':/timed? ?out|timeout/i.test(error.message)?'TIMEOUT':/EACCES|permission denied/i.test(error.message)?'PERMISSION_DENIED':/out of memory|ENOMEM/i.test(error.message)?'MEMORY_LIMIT':'RENDER_ERROR';
+   throw Object.assign(Error('PDF_RENDER_FAILED'),{code:'PDF_RENDER_FAILED',stage,reason});
+  }
   finally{if(timer)clearTimeout(timer);if(browser){const kill=setTimeout(()=>browser.process()?.kill('SIGKILL'),3000);kill.unref();await browser.close().catch(()=>{});clearTimeout(kill);}active--;release();}
  };
 }
@@ -73,7 +77,7 @@ async function verifyRenderer(renderPdf){
  try{
   const data=snapshot({booking_code:'AQH-PDFCHECK2026',guest_name:'اختبار جاهزية الملف',hotel_name:'عقارتكم',room_name:'نسخة اختبار',check_in:'2099-01-01',check_out:'2099-01-02',nights:1,rooms_count:1,adults:1,total:0,currency:'USD',status:'pending',approval_status:'pending',updated_at:'2026-10-02T00:00:00Z'});
   const buffer=await renderPdf(data);return {ready:buffer.subarray(0,5).equals(Buffer.from('%PDF-'))};
- }catch(_error){return {ready:false,code:'PDF_RENDER_FAILED'};}
+ }catch(error){return {ready:false,code:'PDF_RENDER_FAILED',stage:error.stage||'unknown',reason:error.reason||'RENDER_ERROR'};}
 }
 function register(app,{pool,requireOfficeMember,ownedHotel,renderPdf}){
  const select='SELECT b.*,h.name hotel_name,h.city hotel_city,h.district hotel_district,r.name room_name FROM hotel_bookings b JOIN hotels h ON h.id=b.hotel_id JOIN hotel_rooms r ON r.id=b.room_id';

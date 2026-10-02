@@ -41,3 +41,10 @@ test('Android document action opens the existing native PDF save dialog while br
   assert.equal(link.getAttribute('href'),native?'aqartkom-app://print':docs.documentPath(booking.booking_code)+'.pdf');assert.equal(link.hasAttribute('download'),!native);dom.window.close();
  }
 });
+test('startup PDF diagnostics report failure stage without customer text or provider output',async()=>{
+ const renderer=docs.createPdfRenderer({launch:async options=>{
+  assert.equal(options.args.includes('--single-process'),false);
+  throw Error('Protocol error: Target closed PRIVATE CUSTOMER DATA');
+ }});
+ assert.deepEqual(await docs.verifyRenderer(renderer),{ready:false,code:'PDF_RENDER_FAILED',stage:'launch',reason:'BROWSER_CLOSED'});
+});
